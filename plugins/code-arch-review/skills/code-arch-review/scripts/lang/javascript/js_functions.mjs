@@ -184,11 +184,11 @@ export function isSimpleReceiver(node) {
  * @param {object} ctx 解析上下文。
  * @param {object} node 函数或类节点。
  * @param {string} name 已归一到可读文本的名字。
- * @param {boolean} isObjectMember 它是不是对象字面量里的成员。
+ * @param {boolean} isWiring 它是不是就地接线(见 isWiring)。
  * @param {object|null} docRange 紧贴在上方的文档区间。
  * @returns {object} 一条 `FunctionFact` 形状的普通对象。
  */
-export function buildFunction(ctx, node, name, isObjectMember, docRange) {
+export function buildFunction(ctx, node, name, isWiring, docRange) {
   const isClass = isClassNode(node);    // 类与函数共用一条事实,靠这个标记分流
   const doc = docRange ? jsDocTextOf(ctx, docRange) : null;    // 区间有才去取正文,省一次切片
   const params = isClass ? [] : paramNames(node);    // 类不填参数表,参数表是给函数用的
@@ -199,7 +199,7 @@ export function buildFunction(ctx, node, name, isObjectMember, docRange) {
     end_line: lineOf(ctx, node.getEnd()),
     body_lines: bodyLinesOf(ctx, node),
     params,
-    is_public: isPublicName(name, node, isObjectMember),
+    is_public: isPublicName(name, node, isWiring),
     is_class: isClass,
     doc,
     required_sections: sections.required,
@@ -220,10 +220,10 @@ export function buildFunction(ctx, node, name, isObjectMember, docRange) {
  *
  * @param {string} name 名字。
  * @param {object} node 定义节点。
- * @param {boolean} isObjectMember 它是不是对象字面量里的成员。
+ * @param {boolean} isWiring 它是不是就地接线(见 isWiring)。
  * @returns {boolean} 公开给 true。
  */
-export function isPublicName(name, node, isObjectMember) {
+export function isPublicName(name, node, isWiring) {
   // 匿名(回调、默认导出)没有对外名字
   if (!name) return false;
   // 下划线开头是惯例上的私有,井号开头是 ES 的私有字段
@@ -235,7 +235,7 @@ export function isPublicName(name, node, isObjectMember) {
   ) return false;
   // TS 的 private 修饰符同样是私有
   if (hasPrivateModifier(node)) return false;
-  return !isObjectMember;    // 对象字面量的成员是就地接线,不按名字可达
+  return !isWiring;    // 就地接线的名字由别人定,不是按名字可达的模块接口
 }
 
 /* ------------------------------------------------------------------ 命名 */
@@ -330,17 +330,43 @@ export function rightmostName(node) {
 }
 
 /**
- * 这个成员是不是对象字面量里的:它是就地接线,不按名字对外可达,不要求文档。
+ * 这个定义是不是**就地接线**:接到一个已经存在的对象上,而不是按名字对外新增接口。
  *
- * @param {object} node 成员节点。
- * @returns {boolean} 是对象字面量成员给 true。
+ * 接到**成员表达式**上的一律算:`{f: () => {}}` 是接到对象字面量上,`el.onload = () => {}`
+ * 是接到 DOM 节点上,`exports.foo = function () {}` 是接到导出对象上。三者的共同点是
+ * **名字由别人定**(属性名、导出位置)或根本没有名字,作者能写的 JSDoc 只剩复述右侧那串
+ * `() => {}` —— 而那正是「不许复述代码」要挡的东西。要绕开还得把代码改成
+ * `addEventListener('load', ...)`,那是为过闸改行为。
+ *
+ * 赋给**裸名字**的(`foo = function () {}`)不算:名字是作者起的,文档有落点。
+ *
+ * 注意它们仍留在 `functions` 里 —— 不要求文档不等于不用量体量和嵌套,
+ * 一个几百行的事件处理器照样该被 `long-function` 抓出来。
+ *
+ * @param {object} node 命名者节点(属性赋值、方法声明、变量声明、赋值表达式)。
+ * @returns {boolean} 是就地接线给 true。
  */
-export function isObjectMember(node) {
+export function isWiring(node) {
   // 属性赋值 `{f: function () {}}`
   if (ts.isPropertyAssignment(node)) return true;
   // 简写方法 `{f() {}}`:要看它的父节点是不是对象字面量
   if (ts.isMethodDeclaration(node)) return Boolean(node.parent && ts.isObjectLiteralExpression(node.parent));
-  // 其余成员(类方法、类字段)不是对象字面量的成员
+  // 赋值表达式 `x.y = fn`:先确认它是赋值
+  if (
+    // 是二元表达式
+    ts.isBinaryExpression(node) &&
+    // 且运算符是等号 —— `+=` 与 `??=` 不产生新定义
+    node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+  ) {
+    // 左值是成员访问才算接线
+    return (
+      // `x.y = fn`
+      ts.isPropertyAccessExpression(node.left) ||
+      // `x['y'] = fn`
+      ts.isElementAccessExpression(node.left)
+    );
+  }
+  // 类方法与类字段不是接线:它们按名字挂在类上,是类对外接口的一部分
   return false;
 }
 
@@ -373,13 +399,13 @@ export function collectFunctions(ctx) {
  * @param {object} anchor 文档要挂在哪 —— 通常是命名者所在的那一层。
  * @param {object} node 函数或类节点。
  * @param {string} name 已归一的函数名。
- * @param {boolean} isObjectMember 它是不是对象字面量里的成员。
+ * @param {boolean} isWiring 它是不是就地接线(见 isWiring)。
  */
-function addFact(state, anchor, node, name, isObjectMember) {
+function addFact(state, anchor, node, name, isWiring) {
   const docRange = jsDocRangeOf(state.ctx, anchor);    // 紧贴在上方的文档,可能没有
   // 文档区间要单独留着:密度统计里它已经由 fn.doc 计过,整行注释集合里不能再算一次
   if (docRange) state.docRanges.push(docRange);
-  state.facts.push(buildFunction(state.ctx, node, name, isObjectMember, docRange));
+  state.facts.push(buildFunction(state.ctx, node, name, isWiring, docRange));
 }
 
 /**
@@ -417,7 +443,7 @@ function claimNamed(state, node) {
     state.claimed.has(inner)
   ) return;
   state.claimed.add(inner);
-  addFact(state, docAnchorOf(node), inner, nameFromParent(state.ctx, node), isObjectMember(node));
+  addFact(state, docAnchorOf(node), inner, nameFromParent(state.ctx, node), isWiring(node));
 }
 
 /**
@@ -435,7 +461,7 @@ function visitTree(state, node) {
     // 还没被父节点认过,就按自身声明的名字记一条
     if (!state.claimed.has(node)) {
       state.claimed.add(node);
-      addFact(state, node, node, declaredName(node), isObjectMember(node));
+      addFact(state, node, node, declaredName(node), isWiring(node));
     }
   }
   claimNamed(state, node);

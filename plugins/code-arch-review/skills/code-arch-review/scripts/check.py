@@ -27,9 +27,14 @@ from core.rules import evaluate           # noqa: E402
 from lang import registry                 # noqa: E402
 
 # 源码树扫描时要跳过的目录。这些不是「作者写的代码」,扫它们只会淹没真信号。
+#
+# `vendor` 与 `third_party` 和 `node_modules` 同类:放的是第三方的副本或压缩产物。
+# 代价说清楚 —— 真有项目在里面手写代码,那些文件会被静默漏掉,所以这两个名字只在
+# **整个目录名**匹配时跳过,`src/vendor_utils/` 这种不受影响。
 _SKIP_DIRS = frozenset({
     '__pycache__', '.git', '.hg', '.svn', 'node_modules', '.venv', 'venv',
     '.mypy_cache', '.pytest_cache', '.ruff_cache', 'dist', 'build', '.tox',
+    'vendor', 'third_party',
 })
 
 

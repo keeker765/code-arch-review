@@ -53,6 +53,12 @@ python "${CLAUDE_SKILL_DIR}/scripts/check.py" <路径...>
 纯 stdlib 无依赖;PowerShell 档位要 `pwsh`,JS/TS 档位要 `node`,缺哪个自动跳过并报出来。
 目录里一个认得的目标都没有时**报错退出**,不让空集冒充通过。
 
+**递归扫目录时自动跳过这些目录名**:`node_modules` `vendor` `third_party` `dist` `build`
+`.venv` `venv` `.tox` `__pycache__` `.git` 与各类缓存目录 —— 它们是第三方的副本或生成物,
+扫它们只会把真信号淹掉(实测 `static/vendor/xterm.js` 一个压缩文件报出几百条)。
+代价是**真有项目在 `vendor/` 里手写代码,那些文件会被静默漏掉**;要连同一起扫就把文件
+逐个点名传给 `check.py`,显式点名的文件不跳。
+
 放宽阈值(如 `--max-body`)**必须在交付说明里写明放宽了哪条、为什么** —— 不许静默改数。
 
 ## 档位表(2026-10-15 定)
