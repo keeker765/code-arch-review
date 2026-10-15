@@ -38,14 +38,20 @@ _SKIP_DIRS = frozenset({
 })
 
 
-def discover(paths):
+def discover(paths, skip_dirs):
     """把命令行给的文件与目录摊平成「认得的目标文件」列表。
 
     递归遍历指定目录并自动跳过缓存与虚拟环境等非业务目录,过滤出各后端已注册
     的有效源码文件;对于命令行显式传入的单文件,若不支持则记录至未识别列表以便告警。
 
+    跳过名单由调用方给(默认名单 + `--exclude`),而不是直接读模块常量:
+    仓库里夹着生成物(浏览器 profile、抓取缓存)时,调用方要能自己声明「这些不是代码」,
+    否则只剩「把整个目录拆成文件清单」一条路。**跳过的名单只对目录递归生效**,
+    显式点名的单文件一律照扫 —— 那是最直接的逃生口。
+
     Args:
         paths: 命令行给的文件或目录。
+        skip_dirs: 递归时要跳过的目录名集合,整个目录名匹配。
 
     Returns:
         `(文件列表, 不认识但被显式点名的文件列表)`。显式点名一个闸不支持的文件要报出来,
@@ -66,7 +72,7 @@ def discover(paths):
         # 目录才递归展开,与显式单文件分开收集
         for candidate in path.rglob('*'):
             # 先按目录剪枝,否则 node_modules 会把这一趟拖成分钟级
-            if any(part in _SKIP_DIRS for part in candidate.parts):
+            if any(part in skip_dirs for part in candidate.parts):
                 continue
             if (
                 # 候选路径必须是实际文件而非目录或符号链接
@@ -122,7 +128,8 @@ def run(paths, args):
     Returns:
         `(违规列表, 文件数, 跳过的语言, 已解释构造数, 构造总数, 密度, 未认得的文件)`。
     """
-    files, unknown = discover(paths)
+    # 默认跳过名单 + 调用方用 --exclude 声明的:后者是仓库里夹着生成物时的逃生口
+    files, unknown = discover(paths, _SKIP_DIRS | frozenset(args.exclude))
     ready, failed = registry.available()
     # 结合命令行显式传入的阈值参数,生成各可用语言最终生效的阈值映射字典
     overrides = apply_overrides(ready, args)
@@ -193,6 +200,8 @@ def main():
     parser.add_argument('--max-declarations', type=int, default=None)
     # 格式化输出选项:开启时以 JSON 结构输出原始违规列表
     parser.add_argument('--json', action='store_true')
+    # 额外要跳过的目录名。可重复,判据与 _SKIP_DIRS 相同(整个目录名匹配)
+    parser.add_argument('--exclude', action='append', default=[], metavar='目录名')
     # 命令行参数决定阈值覆写与输出模式,不合法入参由 argparse 内部拦截
     args = parser.parse_args()
 

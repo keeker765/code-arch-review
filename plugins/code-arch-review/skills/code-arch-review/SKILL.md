@@ -56,8 +56,14 @@ python "${CLAUDE_SKILL_DIR}/scripts/check.py" <路径...>
 **递归扫目录时自动跳过这些目录名**:`node_modules` `vendor` `third_party` `dist` `build`
 `.venv` `venv` `.tox` `__pycache__` `.git` 与各类缓存目录 —— 它们是第三方的副本或生成物,
 扫它们只会把真信号淹掉(实测 `static/vendor/xterm.js` 一个压缩文件报出几百条)。
-代价是**真有项目在 `vendor/` 里手写代码,那些文件会被静默漏掉**;要连同一起扫就把文件
-逐个点名传给 `check.py`,显式点名的文件不跳。
+代价是**真有项目在 `vendor/` 里手写代码,那些文件会被静默漏掉**。
+
+两条逃生口,都在你这边声明而不是改闸:
+
+* `--exclude <目录名>` —— 可重复。给仓库里夹着的生成物用:浏览器 profile、抓取缓存、
+  导出目录。判据与默认名单相同(**整个目录名**匹配,`src/profiles_util/` 不受影响)。
+  实测 `browser/profiles/{us-01,us-1}/prefs.js` 会报 `duplicate-basename`,加 `--exclude profiles` 即消失。
+* **显式点名的单文件一律照扫**,跳过名单只对目录递归生效 —— 想查 `vendor/` 里那个文件就点名它。
 
 放宽阈值(如 `--max-body`)**必须在交付说明里写明放宽了哪条、为什么** —— 不许静默改数。
 
