@@ -1,0 +1,31 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "code-arch-review",
+  "description": "结构验收闸：把「这段代码读起来累不累」量成可执行的检查单，覆盖 Python / PowerShell / JavaScript / TypeScript / Bash / CSS。查的是结构不是格式——上帝函数、dict 当接口、深嵌套、缺 docstring 与注释、静默吞异常。",
+  "owner": {
+    "name": "keeker765"
+  },
+  "plugins": [
+    {
+      "name": "code-arch-review",
+      "description": "多语言结构验收闸。纯 stdlib，零依赖：Python 用 ast、PowerShell 用系统自带 AST 解析器、JS/TS 走 node。交付前跑到零违规，而不是等 review 来发现。",
+      "author": {
+        "name": "keeker765"
+      },
+      "category": "development",
+      "source": "./plugins/code-arch-review",
+      "homepage": "https://github.com/keeker765/code-arch-review",
+      "keywords": [
+        "code-review",
+        "architecture",
+        "lint",
+        "python",
+        "powershell",
+        "javascript",
+        "typescript",
+        "bash",
+        "css"
+      ]
+    }
+  ]
+}

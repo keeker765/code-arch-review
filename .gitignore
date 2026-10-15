@@ -1,0 +1,20 @@
+# Python 字节码与缓存 —— 不进仓库,它们会随 Python 版本失效并污染 grep
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 编辑器与系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 本仓库自己的临时对拍脚本与其产物(验证重构前后行为一致用,不是交付物)
+_compare.py
+_full.json
+_*.json
+
+# 临时备份与对拍产物(不交付)
+_*.bak

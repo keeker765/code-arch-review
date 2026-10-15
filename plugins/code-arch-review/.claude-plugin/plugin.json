@@ -1,0 +1,9 @@
+{
+  "name": "code-arch-review",
+  "description": "多语言结构验收闸。纯 stdlib，零依赖：Python 用 ast、PowerShell 用系统自带 AST 解析器、JS/TS 走 node。交付前跑到零违规，而不是等 review 来发现。",
+  "author": {
+    "name": "keeker765"
+  },
+  "homepage": "https://github.com/keeker765/code-arch-review",
+  "license": "MIT"
+}
