@@ -154,28 +154,63 @@ def run(paths, args):
         # 当前语言未匹配到待扫描的目标文件时直接跳过,避免后端无效启动
         if not targets:
             continue
-        # 整批交由后端解析:语法分析不执行代码,多文件单次子进程拉起大幅缩短耗时
-        facts_list = language.backend.parse_many(targets)
-        all_facts.extend(facts_list)
-        # 后端跳过解析失败的文件 —— 这里按差额察觉,不静默当作「零违规」
-        if len(facts_list) < len(targets):
-            failed.append((language.name, f'{len(targets) - len(facts_list)} 个文件解析失败'))
-        # 事实与阈值比对是语言无关的通用规则逻辑,同一套规则解释多门语言
-        for facts in facts_list:
-            # 运行核心规则集合评估该文件的违规情况与注释覆盖度
-            outcome = evaluate(facts, overrides[language.name], language.disabled_rules)
-            findings.extend(item for item in outcome.findings
-                            if item.rule not in language.disabled_rules)
-            covered += outcome.covered
-            total += outcome.total
-        findings.extend(item for item in
-                        package.package_shape(targets, overrides[language.name].max_modules,
-                                              language.reserved)
-                        if item.rule not in language.disabled_rules)
-        # 测试模块互相 import 是跨文件判据:要拿本次扫到的全部测试模块名当白名单
-        findings.extend(item for item in package.test_imports(facts_list)
-                        if item.rule not in language.disabled_rules)
+        # 一门语言一趟:解析、规则求值、跨文件的包级判据都在 scan_language 里
+        found, facts, lang_covered, lang_total = scan_language(
+            language, targets, overrides[language.name], failed)
+        findings.extend(found)
+        all_facts.extend(facts)
+        covered += lang_covered
+        total += lang_total
     return findings, len(all_facts), failed, covered, total, report.density(all_facts), unknown
+
+
+def scan_language(language, targets, thresholds, failed):
+    """把一门语言的这一批文件扫完,产出违规、事实与覆盖率的分子分母。
+
+    单开一层是为了让 `run` 只呈现阶段:一门外语言的完整流程(解析 → 逐文件求值 →
+    包级判据)与另外五门完全一样,混在主流程里会把「扫了哪些语言」这件主线淹掉。
+
+    Args:
+        language: 该语言的配置。
+        targets: 这门语言的待扫文件。
+        thresholds: 这门语言生效的阈值(可能已被命令行覆写)。
+        failed: 跳过原因列表,原地追加。
+
+    Returns:
+        `(违规列表, 事实列表, 已解释构造数, 构造总数)`;后端起不来时四项都为空。
+    """
+    # 整批交由后端解析:语法分析不执行代码,多文件单次子进程拉起大幅缩短耗时。
+    # 后端起不来**在这里兜住**:PowerShell 后端在没有 pwsh 的机器上是解析时才发现的,
+    # 冒出去等于整趟扫描以 traceback 收场 —— 正确行为是记成「跳过这门语言」,
+    # 与 `registry.available()` 那批一样进报告,读者才知道自己少扫了什么。
+    try:
+        # 后端起不来会在这个调用里抛,交给下面的 except 转成跳过原因
+        facts_list = language.backend.parse_many(targets)
+    except RuntimeError as error:
+        failed.append((language.name, str(error)))
+        return [], [], 0, 0
+    # 后端跳过解析失败的文件 —— 这里按差额察觉,不静默当作「零违规」
+    if len(facts_list) < len(targets):
+        failed.append((language.name, f'{len(targets) - len(facts_list)} 个文件解析失败'))
+    findings = []
+    covered = 0
+    total = 0
+    # 事实与阈值比对是语言无关的通用规则逻辑,同一套规则解释多门语言
+    for facts in facts_list:
+        # 运行核心规则集合评估该文件的违规情况与注释覆盖度
+        outcome = evaluate(facts, thresholds, language.disabled_rules)
+        findings.extend(item for item in outcome.findings
+                        if item.rule not in language.disabled_rules)
+        covered += outcome.covered
+        total += outcome.total
+    # 包级形状(平铺目录、同名模块)要拿整批路径一起看,单个文件判不出来
+    findings.extend(item for item in package.package_shape(targets, thresholds.max_modules,
+                                                           language.reserved)
+                    if item.rule not in language.disabled_rules)
+    # 测试模块互相 import 是跨文件判据:要拿本次扫到的全部测试模块名当白名单
+    findings.extend(item for item in package.test_imports(facts_list)
+                    if item.rule not in language.disabled_rules)
+    return findings, facts_list, covered, total
 
 
 def main():

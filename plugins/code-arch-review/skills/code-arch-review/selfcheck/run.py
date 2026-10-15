@@ -22,19 +22,26 @@ CHECK = HERE.parent / 'scripts' / 'check.py'
 
 
 def run(target):
-    """跑一次闸,拿它的标准输出。
+    """跑一次闸,拿它的输出。
 
     刻意不看退出码:坏样本本来就该退出 1,把它当异常会让阳性对照本身变成错误。
     断言一律落在输出文本上(数违规条数、读覆盖率)。
+
+    🔴 **stderr 并进 stdout**:闸用 `sys.exit('<消息>')` 报「一个目标都没扫到」,
+    而那句走的是 stderr。只收 stdout 的话 `fixture_unavailable` 拿到的是空串,
+    于是一台缺 pwsh 的机器上 PowerShell 夹具会被判成「合规样本报了违规」——
+    报错信息与真实原因完全无关,查半天查不到点上。
 
     Args:
         target: 要扫的文件或目录。
 
     Returns:
-        闸的标准输出。
+        闸的标准输出与标准错误的合并文本。
     """
+    # 用 stdout=PIPE + stderr=STDOUT 而不是 capture_output:后者与 stderr 重定向互斥
     return subprocess.run([sys.executable, str(CHECK), str(target)],
-                          capture_output=True, text=True).stdout
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          text=True).stdout
 
 
 def check_python_fixture():
@@ -80,13 +87,25 @@ def fixture_unavailable(out):
     否则一台没装 node 的机器会让整个自检红,而那条信息是噪声不是缺陷。
     代价是跳过的夹具也不能算通过,所以调用方必须把跳过项单独报出来。
 
+    🔴 报告里那行 `⚠ 跳过 <语言>` 也算数:后端起不来时的完整流程是「发现文件 → 起不来 →
+    记成跳过」,这时报告仍会打出「0 处违规」。只认前两种就绪失败的写法,会把
+    **「一门语言整批没扫」认成「这门语言合规」** —— 一台没装 pwsh 的机器上,
+    PowerShell 夹具会假绿,而假绿正是这套自检存在的理由要挡的东西。
+
     Args:
         out: 闸在夹具上的一次输出。
 
     Returns:
         没扫到东西时返回 True。
     """
-    return '没有匹配到任何目标文件' in out or '不认得的文件类型' in out
+    return (
+        # 一个目标文件都没认出来(路径写错、扩展名不支持)
+        '没有匹配到任何目标文件' in out
+        # 或认出来了但一门语言都没接住
+        or '不认得的文件类型' in out
+        # 或文件认出来了、后端却起不来,整门语言被跳过
+        or '⚠ 跳过' in out
+    )
 
 
 def check_clean_fixtures():
