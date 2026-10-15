@@ -32,10 +32,10 @@ def density(facts_list):
         # 整行注释数与文档行数才是「说出来的话」;行尾注释不另计,它已在整行里被排除
         spoken += len(facts.whole_line_rows)
         spoken += len((facts.module_doc or '').splitlines())
-        # 遍历模块内定义的全部函数与类:提取其文档注释行数计入有效说明行
+        # 函数与类的 docstring 多行文本同样算入「解释代码的话」
         for fn in facts.functions:
             spoken += len((fn.doc or '').splitlines())
-    # 返回说明密度百分比:口径为[0.0, 100.0],总行数为 0 时返回 0.0 避免除零
+    # 说明密度口径为 [0.0, 100.0],无源码行时取 0.0 避免除零
     return spoken / total * 100 if total else 0.0
 
 
@@ -81,11 +81,11 @@ def render(findings, file_count, skipped, covered, total_constructs):
     lines.append('')
     lines.append(f'扫描 {file_count} 个文件,{len(findings)} 处违规'
                  f'(其中 {len(blocking(findings))} 处计入退出码)')
-    # 遍历因工具链缺失而跳过的语言后端:逐项输出告警原因,确保跳过显式透明
+    # 依赖缺失等跳过原因必须显式展示,防止调用方将「未扫描」误当作「零违规通过」
     for language, reason in skipped:
         lines.append(f'⚠ 跳过 {language}:{reason}')
 
-    # 计算实际注释覆盖率百分比:分子为已解释构造数,无待解释构造时按 100.0% 计
+    # 无任何待解释构造时按 100.0% 满分通过,分子与分母同为 0 时不报除零
     percent = 100.0 if not total_constructs else covered / total_constructs * 100
     lines.append(f'注释覆盖率 {percent:.1f}%  '
                  f'({covered}/{total_constructs} 个该解释的构造已注释)'

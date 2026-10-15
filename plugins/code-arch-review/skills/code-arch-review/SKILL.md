@@ -58,6 +58,8 @@ python "${CLAUDE_SKILL_DIR}/scripts/check.py" <路径...>
 ## 档位表(2026-10-15 定)
 
 `✅` 查、`⚠️` 查但可能误报(报告标注)、`⬜` 已实现但默认不拦、`—` 明确不查。
+🔴 JS / TS 那一列的 `⚠️` **要连跑的是哪一档一起读** —— 默认降级成启发式时,其中几条根本不触发,
+见下面「已知缺口二」。
 
 | 规则 | Python | PowerShell | JS / TS | Bash | CSS |
 |---|---|---|---|---|---|
@@ -79,9 +81,17 @@ python "${CLAUDE_SKILL_DIR}/scripts/check.py" <路径...>
 逐条要求注释会让人把闸关掉 —— 要开就在 `scripts/lang/registry.py` 删掉 `_SHELL_DISABLED` 里的名字。
 CSS 不查逐块注释同理。**只报噪声的闸和没有一样**,这是取舍不是遗漏。
 
-**已知缺口(2026-10-15 实测)**:`packed-layout` 与 `uncommented-flat` 依赖后端产出的
+**已知缺口一(2026-10-15 实测)**:`packed-layout` 与 `uncommented-flat` 依赖后端产出的
 `layout_gaps` / `flat_runs`。PowerShell / Bash / CSS 的后端**留空这两项**(语句流里混着
 scriptblock、哈希表、heredoc 等,口径要另定一套,做不准比不做更坏),所以格子标 `—` 而非「漏做」。
+
+**已知缺口二 —— JS/TS 那一列的 `⚠️` 只在精确档成立**。这一门标着「半精确」,但**默认状态就是
+降级**:精确档要 `node` + 一个 `typescript` 包,而本机(以及多数机器)两样通常只满足前者,
+于是每次都是启发式。启发式那档里 `body_lines` / `nesting_depth` / `string_key_count` 一律给 0,
+`fields` / `flat_runs` / `layout_gaps` 留空 —— 所以 `long-function`、`deep-nesting`、
+`packed-layout`、`uncommented-flat` **在那一档根本不触发**,不是「可能误报」而是「没查」。
+判据是 stderr 里有没有那行 `⚠ JS/TS 后端降级为启发式`;要精确档就装 `typescript` 或设
+`CODE_ARCH_REVIEW_TS`。两档实测差 37 条漏报 / 8 条多报,明细与语料见 `references/languages.md`。
 
 `packed-layout` 不是可有可无的:它正是防「删空行把行数压到 `long-module` 阈值以下」的那条,
 **那三门语言目前挡不住这种压行**。要补就在各自后端里产出 `layout_gaps`。

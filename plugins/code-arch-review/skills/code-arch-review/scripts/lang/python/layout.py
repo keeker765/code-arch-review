@@ -35,7 +35,7 @@ def comment_rows(source):
     # 存储包含有效注释的物理行号集合(1 基)
     rows = set()
     try:
-        # 遍历词法标记流:仅提取 COMMENT 类型 token 的起始行号
+        # tokenize 词法标记流自动排除字符串与 f-string 内的 # 符号
         for token in tokenize.generate_tokens(io.StringIO(source).readline):
             # 只收 COMMENT token:它已经由词法器从字符串、f-string、正则里区分出来了
             if token.type == tokenize.COMMENT:
@@ -140,7 +140,7 @@ def flat_runs(tree, whole_line):
             continue
         # 函数体内每个块单独数:嵌套块会由它自己的节点再走一遍,不在这里合并
         for node in ast.walk(func):
-            # 遍历该 AST 节点直接包含的所有独立语句块
+            # blocks() 产生式统一抽取出 body/orelse/finalbody 等语句列表
             for group in blocks(node):
                 runs.extend(_runs_in_group(group, whole_line))
     return runs
@@ -181,7 +181,7 @@ def _layout_gaps(body, need, lines):
         `[(行号, 定义名, 实际空行数, 需要的空行数)]`。
     """
     gaps = []
-    # 遍历块内直接子节点,排查相邻函数与类定义之间的空行距离
+    # 相邻定义之间必须留足物理空行,防范删空行压行数规避 long-module
     for index, node in enumerate(body):
         # 只查函数与类定义:变量赋值之间的空行是排版权,不是结构信号
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
@@ -189,7 +189,7 @@ def _layout_gaps(body, need, lines):
         # 块内第一个定义没有上一个兄弟,空行由外层的规则负责
         if index == 0:
             continue
-        # 计算包含装饰器与前置注释的定义逻辑起始物理行号
+        # 装饰器与前置注释块均属定义头部,空行必须留在此头部上方
         row = _layout_head(node, lines)
         got = 0
         # row-1-got 是往上数第几个空行;越过文件头当作已满足,避免首个定义误报

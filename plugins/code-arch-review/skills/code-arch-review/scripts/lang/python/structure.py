@@ -96,7 +96,7 @@ def string_keys(node):
         最大的键数;没有下标取值时返回 0。
     """
     seen = {}
-    # 遍历函数内部语法树子节点,收集按字符串下标取值的目标变量
+    # 统计单变量在当前函数体内的字典键使用离散度
     for child in ast.walk(node):
         # 只认 `名字['字符串']` 这一种形态:属性访问(`a.b`)与数字下标(`a[0]`)
         # 都不是「按字段名取值」,放进来会误报
@@ -129,7 +129,7 @@ def conditions(tree):
         `ConditionFact` 列表,按行号排序。
     """
     seen = {}
-    # 遍历模块内所有函数与方法节点以提取内部条件分支
+    # 条件分支仅在函数体内才具业务判定意义,排除模块层守卫
     for func in ast.walk(tree):
         # 只看函数体:模块层与类体里的 if 没有业务分支的含义
         if not isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -204,7 +204,7 @@ def function_facts(tree):
         `FunctionFact` 列表。
     """
     facts = []
-    # 遍历语法树中所有函数、异步函数与类定义节点
+    # 函数与类是架构度量的主要载体,提取接口签名、体长与文档事实
     for node in ast.walk(tree):
         # 只有函数与类才有「公开/私有、体长、文档」这一组属性
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
@@ -237,7 +237,7 @@ def _try_facts(node, silent):
         node: 已确认是 `ast.Try` 的节点。
         silent: 收集行号的列表,原地追加。
     """
-    # 遍历 try 语句所挂载的各 except 异常处理分支
+    # except 体若仅含 pass 会导致错误被静默吞掉,记录其所在物理行号
     for handler in node.handlers:
         if (
             # except 体只有一条语句
@@ -280,7 +280,7 @@ def simple_facts(tree):
                                      accepts_inline=True))
         # 算出来的变量:名字说「是什么」,注释才说「怎么来的」
         if (
-            # 赋值语句
+            # 普通赋值节点且具有明确赋值目标
             isinstance(node, ast.Assign)
             # 右侧是运算/调用/三元/比较 —— 字面量赋值不要求注释
             and isinstance(node.value, _COMPUTED_ASSIGN)

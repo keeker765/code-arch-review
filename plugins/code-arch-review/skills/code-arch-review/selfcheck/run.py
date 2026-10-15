@@ -143,13 +143,13 @@ def main():
     包含 Python 满覆盖自检、duplicate-toplevel 阳性对照与各语言合规样本扫描。
     任何一项失败立即抛出 AssertionError 中断流程,全绿时输出包含 SELFCHECK_OK 的状态串。
     """
-    # 依次执行满覆盖断言、重复顶层定义阳性对照与各语言合规及坏样本校验
+    # 汇总核心覆盖率断言、阳性对照与多语言样本的校验结果
     results = [check_python_fixture(), check_duplicate_fixture()]
     clean_ok, clean_skip = check_clean_fixtures()
     bad_ok, bad_skip = check_bad_fixtures()
     results.append(f'合规样本 0 违规:{", ".join(clean_ok) or "无"}')
     results.append(f'坏样本报违规:{", ".join(bad_ok) or "无"}')
-    # 合并两组测试中跳过的语言扩展名后缀集合
+    # 取好坏两组对照测试中跳过语言的并集,确保任一阶段跳过均显式汇报
     skipped = sorted(set(clean_skip) | set(bad_skip))
     # 跳过的夹具没被真正扫过,必须显式报出来 —— 否则「全绿」里混着没跑过的项
     if skipped:

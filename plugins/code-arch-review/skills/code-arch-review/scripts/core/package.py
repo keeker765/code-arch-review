@@ -46,7 +46,7 @@ def package_shape(paths, max_modules, reserved):
                 detail=f'{len(modules)} 个模块平铺在同一层 > {max_modules}',
                 why=RULES['flat-package']))
 
-    # 遍历每个文件名及其出现目录:逐一判定是否存在跨目录同名歧义并提取位置
+    # 跨目录同名会造成导入歧义与阅读误导,同名出现在两个及以上目录时报警
     for name, folders in sorted(names.items()):
         # 只出现在一个目录的名字不构成歧义
         if len(folders) <= 1:

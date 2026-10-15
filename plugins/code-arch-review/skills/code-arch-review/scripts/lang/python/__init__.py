@@ -36,9 +36,9 @@ def parse(path: Path) -> FileFacts:
     source = path.read_text(encoding='utf-8')
     # 行列表按 '\n' 切、行数按 splitlines:前者给 1 基行号索引,后者不含末尾空行
     lines = source.split('\n')
-    # 解析生成标准 AST 树,遇到语法错误由外部捕获
+    # 语法错误由 ast.parse 自然抛出给上层按文件差额察觉,不在此处捕获吞掉
     tree = ast.parse(source)
-    # 利用 tokenize 抽取包含行尾注释在内的所有注释物理行号集合
+    # tokenize 物理词法流能准确剥离引号内 # 符号,得到真实注释行集合
     all_comments = layout.comment_rows(source)
     # 独立整行注释:行尾注释不算。条件/循环/抛异常/平铺段只认这一种
     whole_line = {row for row in all_comments if lines[row - 1].lstrip().startswith('#')}

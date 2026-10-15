@@ -190,7 +190,7 @@ def code_part(line, line_marker):
         标记之前的代码部分;没有标记时返回原行。
     """
     line_at, _block_at = scan_comment_spans(line, line_marker)
-    # 返回截去注释后的前缀源码:存在注释时截取前闭后开区间,无注释时返回原文本
+    # 引号外未命中行注释标记时保留整行,命中时截断至标记前位置
     return line[:line_at] if line_at >= 0 else line
 
 

@@ -66,7 +66,7 @@ function Get-OwnerFacts($Ast, $ClassNodes) {
         }
     }
     $Owners = @()
-    # 收集脚本级函数定义
+    # 脚本级顶层函数独立量取形状,类内部的方法则由后续 Members 分支统一处理
     foreach ($node in @($Ast.FindAll({ $args[0].GetType().Name -eq 'FunctionDefinitionAst' }, $true))) {
         # 类方法里嵌着一个同名的 FunctionDefinitionAst(Parent 是 FunctionMemberAst),
         # 拿着它会让同一个方法被数两次;方法统一走下面的 Members 分支
@@ -168,7 +168,7 @@ function Get-ControlFacts($Ast) {
         if ($innerKind -in 'ExpandableStringExpressionAst', 'HashtableAst', 'ArrayLiteralAst') { continue }
         $Returns += [pscustomobject]@{ line = $node.Extent.StartLineNumber; label = 'return' }
     }
-    # 返回控制流结构事实,供 rules.py 统一比对上方独立注释行与行号边界
+    # 控制流事实包:供 rules.py 统一比对上方独立注释行与行号边界
     return [pscustomobject]@{
         conditions = $Conditions; loops = $Loops; raises = $Raises; returns = $Returns
     }
@@ -292,7 +292,7 @@ function Get-BindingFacts($Ast, $ClassNodes) {
     带 `fields` / `assigns` / `silent` / `bindings` 四个数组的 pscustomobject。
     #>
     $Field = Get-FieldFacts $Ast $ClassNodes
-    # 提取所有右侧为计算或调用的赋值事实,传入字段偏移以跳过重复声明
+    # 传入字段声明占用的偏移量以屏蔽字段赋值,仅提取函数体内部参与运算的局部赋值
     $Assigns = Get-AssignFacts $Ast $Field.offsets
     $Silent = @()
     # catch 体是空的,异常被吞掉且不留痕迹
@@ -329,7 +329,7 @@ function Get-BindingFacts($Ast, $ClassNodes) {
         }
         # 剩下的只有赋值可能构成绑定
         if (-not (Test-Kind $statement 'AssignmentStatementAst')) { continue }
-        # 剥离赋值目标左侧的变量路径节点
+        # 顶层属性设置或数组索引写入不产生新符号绑定,仅提取纯变量名作为模块级绑定
         $variable = Get-LeftVariable $statement.Left
         # 左侧不是裸变量就不构成「定义了一次这个名字」
         if ($null -eq $variable) { continue }
@@ -345,7 +345,7 @@ function Get-BindingFacts($Ast, $ClassNodes) {
             line = $statement.Extent.StartLineNumber; references_self = $selfReference
         }
     }
-    # 汇总打包字段声明、非平凡赋值、吞异常行及顶层绑定记录对象
+    # 绑定与语句事实汇总:供上层门禁检查未注释字段、未注释赋值、空 catch 与顶层重定义
     return [pscustomobject]@{
         fields = $Field.fields; assigns = $Assigns; silent = $Silent; bindings = $Bindings
     }
@@ -373,30 +373,29 @@ function Get-FileFacts([string]$Target) {
     $ItemWatch = [System.Diagnostics.Stopwatch]::StartNew()
     # 逐文件打一行路径,便于把慢的那个文件对上是哪一个
     if ($Script:Timing) { [Console]::Error.WriteLine("  $Target") }
-    # 完整读取脚本源文件物理文本,供词法分析器分词及行号位置匹配
+    # 源码文本统一全量载入,由 Parser 处理换行与字符编码并保留原始行号
     $Text = [System.IO.File]::ReadAllText($Target)
     $TokenList = $null
     $ParseErrors = $null
-    # 调用系统 Parser 提取 AST 树形结构与词法 Token 序列
+    # 纯语法解析不执行代码,通过 ref 参数同时回收 Token 流与语法诊断信息
     $Ast = [System.Management.Automation.Language.Parser]::ParseInput($Text, [ref]$TokenList, [ref]$ParseErrors)
     Write-Segment 'parse' $ItemWatch
-    # 从 Token 流提取注释行号集合以及文件顶部帮助文档
+    # 切割整行与行尾注释并构建脚本级帮助块缓存,为后续判定构造上方注释准备
     $Tokens = Get-TokenFacts $TokenList $Text
     Write-Segment 'comments' $ItemWatch
-    # 枚举与 DSC 配置也是 TypeDefinitionAst,但它们没有「类的形状」,先筛掉
     $ClassNodes = @()
-    # 遍历类型定义节点,过滤出 class 关键字声明的真实类定义
+    # IsClass 为假的是 enum 与 DSC 配置 —— 它们也走 TypeDefinitionAst,但量不出「类的形状」
     foreach ($node in @($Ast.FindAll({ $args[0].GetType().Name -eq 'TypeDefinitionAst' }, $true))) {
-        # 只有 class 关键字定义的才算类
+        # 排除非 class 构造,仅把真实类定义送入后续形状测量流程
         if ($node.IsClass) { $ClassNodes += $node }
     }
-    # 抽取脚本中全部函数、类及类方法的定义与形状事实
+    # 汇总脚本级函数、类以及类方法,统一量取行数、嵌套深度和参数列表事实
     $FunctionFacts = Get-OwnerFacts $Ast $ClassNodes
     Write-Segment 'functions' $ItemWatch
-    # 抽取分支条件、循环、抛出异常及非裸值返回等控制流事实
+    # 扫描语法树中所有控制流节点行号,供后续比对是否存在整行解释
     $Control = Get-ControlFacts $Ast
     Write-Segment 'constructs' $ItemWatch
-    # 抽取模块字段、右侧计算赋值、空体异常吞噬及顶层绑定事实
+    # 扫描字段声明、非字面量计算赋值与顶层符号绑定,记录覆盖率分母项目
     $Binding = Get-BindingFacts $Ast $ClassNodes
     $ErrorMessages = @()
     # 语法错误不吞:随结果一起回去,调用方按文件数差额察觉

@@ -48,9 +48,9 @@ def discover(paths):
     """
     found = []
     unknown = []
-    # 遍历命令行传入的每个初始路径:区分显式单文件与待递归扫描的目录
+    # 显式点名的单文件与目录在此分流:文件单独判是否受支持,目录递归展开
     for path in paths:
-        # 判断传入路径是否为显式指定的单个文件
+        # 显式点名单文件必须回话,哪怕暂不支持也不能静默丢掉
         if path.is_file():
             # 显式点名一个文件:认不认得都要有回话
             if registry.detect(path) is None:
@@ -58,7 +58,7 @@ def discover(paths):
             else:
                 found.append(path)
             continue
-        # 递归遍历目录下的全部文件与子目录候选节点
+        # 目录才递归展开,与显式单文件分开收集
         for candidate in path.rglob('*'):
             # 先按目录剪枝,否则 node_modules 会把这一趟拖成分钟级
             if any(part in _SKIP_DIRS for part in candidate.parts):
@@ -90,11 +90,11 @@ def apply_overrides(languages, args):
     # 逐语言处理配置:独立构造每种语言最终生效的阈值对象以防跨语言污染
     for language in languages:
         changes = {}
-        # 遍历所有可覆写的阈值字段名,逐个提取命令行显式传入的值
+        # 覆写项与 Thresholds 字段一一对应,None 表示调用方未在命令行指定
         for name in ('max_body', 'max_kwargs', 'max_keys', 'max_depth',
                      'min_module_doc', 'max_modules', 'max_flat', 'max_module_lines',
                      'max_declarations'):
-            # 动态反射获取命令行命名空间中对应阈值的入参值
+            # 没传时不出现在 changes 里,保持该语言原本设定的默认阈值
             value = getattr(args, name)
             # 没传就保持该语言自己的值,不要拿默认值把它盖掉
             if value is not None:
@@ -136,19 +136,19 @@ def run(paths, args):
     all_facts = []
     covered = 0
     total = 0
-    # 遍历所有环境就绪的语言后端,依次执行语法解析、规则裁决与包结构检查
+    # 按语言分组后分批喂给对应后端,使多文件共用一次 pwsh/node 子进程开销
     for language in ready:
         targets = grouped[language.name]
         # 当前语言未匹配到待扫描的目标文件时直接跳过,避免后端无效启动
         if not targets:
             continue
-        # 调用语言后端批量解析该语言下的所有源码文件,抽取语义事实结构
+        # 整批交由后端解析:语法分析不执行代码,多文件单次子进程拉起大幅缩短耗时
         facts_list = language.backend.parse_many(targets)
         all_facts.extend(facts_list)
-        # 解析失败的文件由后端跳过 —— 这里按差额察觉,不静默当作「零违规」
+        # 后端跳过解析失败的文件 —— 这里按差额察觉,不静默当作「零违规」
         if len(facts_list) < len(targets):
             failed.append((language.name, f'{len(targets) - len(facts_list)} 个文件解析失败'))
-        # 逐个文件比对规则:调用核心规则评估器比对提取的语言无关事实与阈值
+        # 事实与阈值比对是语言无关的通用规则逻辑,同一套规则解释多门语言
         for facts in facts_list:
             # 运行核心规则集合评估该文件的违规情况与注释覆盖度
             outcome = evaluate(facts, overrides[language.name], language.disabled_rules)
@@ -185,7 +185,7 @@ def main():
     parser.add_argument('--max-declarations', type=int, default=None)
     # 格式化输出选项:开启时以 JSON 结构输出原始违规列表
     parser.add_argument('--json', action='store_true')
-    # 解析命令行传入的实参列表
+    # 命令行参数决定阈值覆写与输出模式,不合法入参由 argparse 内部拦截
     args = parser.parse_args()
 
     findings, file_count, skipped, covered, total, density, unknown = run(args.paths, args)
@@ -196,7 +196,7 @@ def main():
         sys.exit(f'没有匹配到任何目标文件,拒绝以「零违规」收场。'
                  f'未支持的扩展名:{names or "无"}')
 
-    # 过滤出所有阻断型违规项,排除启发式档位下易误报的结构项
+    # 启发式后端的结构项易误报,仅阻断型硬指标决定非零退出码
     blocking = report.blocking(findings)
     # 指定 --json 选项时直接输出结构化结果,供自动化工具消费
     if args.json:
@@ -205,7 +205,7 @@ def main():
         print(report.render(findings, file_count, skipped, covered, total))
         print(f'说明密度 {density:.1f}%   (参照:20% 以下基本可判定「只有一行式文档,'
               f'没有解释为什么」)')
-        # 逐个输出被忽略的不支持文件路径提示,确保扫描范围清晰透明
+        # 显式点名但无法识别的文件逐条提示,避免读者误以为这些路径已通过审查
         for path in unknown:
             print(f'⚠ 不认得的文件类型,已跳过:{path}')
     sys.exit(1 if blocking else 0)

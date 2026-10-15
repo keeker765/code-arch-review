@@ -150,7 +150,7 @@ def _duplicate_bindings(bindings):
     """
     seen = {}
     dups = []
-    # 遍历按源码顺序排列的顶层绑定:比对是否存在同名覆盖并排除自引用扩展
+    # 后出现的同名绑定若未引用自身即构成覆盖,排除 a = a + 1 这类就地扩展
     for binding in bindings:
         # 第一次见到这个名字:记下位置,是不是重复要等第二次才知道
         if binding.name not in seen:
@@ -203,10 +203,10 @@ def _check_conditions(facts, add):
         facts: 该文件的事实。
         add: 记一条违规的回调。
     """
-    # 逐个检查函数体内的条件分支:统计各子条件所在行号以判定挤行与缺注释
+    # 条件既查同一行是否存在多个判据(挤行),也查每个判据上方是否有独立注释
     for condition in facts.conditions:
         shared = {}
-        # 遍历该条件语句包含的所有子条件所在代码行号
+        # 统计每个子判据所在行号的出现频次以识别同行挤压
         for row in condition.operand_lines:
             shared[row] = shared.get(row, 0) + 1
         # ① 同一行上出现两个判据就是挤了
@@ -233,7 +233,7 @@ def _check_layout(facts, thresholds, add):
         thresholds: 阈值。
         add: 记一条违规的回调。
     """
-    # 遍历顶层定义与方法之间的空行间隙:校验是否因删减空行规避长模块闸
+    # 顶层定义与类方法上方的空行必须满足间隔规范,防范删空行压行作弊
     for row, name, got, need in facts.layout_gaps:
         add(row, 'packed-layout', f'{name} 上方 {got} 个空行 < {need}')
 
@@ -385,7 +385,7 @@ def _check_functions(facts, thresholds, add):
         thresholds: 阈值。
         add: 记一条违规的回调。
     """
-    # 遍历模块内定义的全部函数与类事实节点
+    # 函数与类先统一检验文档完备性,函数再额外审查形状指标(类不判形状)
     for fn in facts.functions:
         _check_docs(fn, thresholds, add)
         # 类只判文档,形状那几条对类不成立
@@ -467,7 +467,7 @@ def _coverage(facts: FileFacts, disabled=frozenset()):
         # 规则在当前语言被明确禁用时,其名下的构造不计入分母
         if rule in disabled:
             return
-        # 遍历该规则收集到的所有构造行号,逐项统计覆盖状态
+        # 构造行号已按规则去重,逐行由 tally 判定上方整行或行尾注释
         for row in rows:
             tally(row, accepts_inline=accepts_inline)
 

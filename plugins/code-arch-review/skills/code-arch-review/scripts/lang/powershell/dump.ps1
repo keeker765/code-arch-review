@@ -100,7 +100,7 @@ $Results = @()
 # 整批共用一次进程:PowerShell 起进程约 0.3 秒,逐文件起一次会把扫描拖成分钟级
 foreach ($Target in $Targets) {
     try {
-        # 解析单个目标文件语法树并抽取结构事实元数据
+        # 目标文件经 AST 解析与结构事实抽取产出标准化 Entry 字典
         $Entry = Get-FileFacts $Target
         $Entry.path = $Target
         $Results += $Entry

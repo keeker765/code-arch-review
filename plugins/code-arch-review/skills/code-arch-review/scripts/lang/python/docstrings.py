@@ -31,12 +31,12 @@ def missing_sections(node, doc):
     args = node.args
     names = [item.arg for item in (*args.posonlyargs, *args.args, *args.kwonlyargs)
              if item.arg not in ('self', 'cls')]
-    # 遍历函数体语法树:检测是否存在显式带返回值的 return 语句
+    # 裸 return 与 return None 属于无值退出,仅带表达式的 return 才要求 Returns 小节
     returns = any(isinstance(item, ast.Return) and item.value is not None
                   for item in ast.walk(node))
-    # 遍历函数体语法树:检测是否存在 yield 或 yield from 生成器语句
+    # 生成器函数写 Yields 而非 Returns,需扫描 yield 与 yield from 两类产出节点
     yields = any(isinstance(item, (ast.Yield, ast.YieldFrom)) for item in ast.walk(node))
-    # 遍历函数体语法树:检测是否存在显式抛出异常的 raise 语句
+    # 递归子节点排查显式 raise 语句,只要会抛异常就必须在文档中声明 Raises 小节
     raises = any(isinstance(item, ast.Raise) for item in ast.walk(node))
     missing = []
     if (
