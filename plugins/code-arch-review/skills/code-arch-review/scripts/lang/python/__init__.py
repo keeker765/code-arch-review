@@ -1,8 +1,8 @@
 """Python 后端:把源码解析成 `core.model.FileFacts`。**精确档**,stdlib `ast`,无依赖。
 
 这个包只有入口与编排。语法树的翻译在 `structure.py`,注释行与空行在 `layout.py`,
-顶层绑定在 `bindings.py`,文档小节在 `docstrings.py` —— 拆开是因为这四组判据的
-失败方式互不相同,而入口本身应该能一眼读完。
+顶层绑定在 `bindings.py`,文档小节在 `docstrings.py`,测试判据在 `tests.py` ——
+拆开是因为这五组判据的失败方式互不相同,而入口本身应该能一眼读完。
 """
 
 import ast
@@ -10,7 +10,7 @@ from pathlib import Path
 
 from core.model import FileFacts
 
-from . import bindings, layout, structure
+from . import bindings, layout, structure, tests
 
 LANGUAGE = 'python'
 EXTS = ('.py',)
@@ -43,6 +43,8 @@ def parse(path: Path) -> FileFacts:
     # 独立整行注释:行尾注释不算。条件/循环/抛异常/平铺段只认这一种
     whole_line = {row for row in all_comments if lines[row - 1].lstrip().startswith('#')}
     loops, raises, fields, assigns, returns, silent = structure.simple_facts(tree)
+    # 测试相关事实单独一次抽齐:分类、可收集用例数、改 sys.path 的行、导入的顶层模块名
+    test_info = tests.test_facts(path, tree)
     return FileFacts(
         path=path,
         language=LANGUAGE,
@@ -61,7 +63,11 @@ def parse(path: Path) -> FileFacts:
         bindings=bindings.bindings(tree),
         flat_runs=layout.flat_runs(tree, whole_line),
         layout_gaps=layout.packed_layout(tree, lines),
-        heuristic=False)
+        heuristic=False,
+        test_kind=test_info['test_kind'],
+        collectable=test_info['collectable'],
+        syspath_lines=test_info['syspath_lines'],
+        imports=test_info['imports'])
 
 
 def parse_many(paths) -> list:

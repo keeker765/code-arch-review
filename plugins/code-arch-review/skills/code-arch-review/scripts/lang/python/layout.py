@@ -10,6 +10,7 @@
 """
 
 import ast
+import contextlib
 import io
 import tokenize
 
@@ -34,14 +35,14 @@ def comment_rows(source):
     """
     # 存储包含有效注释的物理行号集合(1 基)
     rows = set()
-    try:
+    # 语法合法性已由 ast.parse 把关,词法层的报错只可能是片段源码;半途中断时
+    # 保留已经收到的注释行,比整份丢掉更有用 —— 所以这里是有意忽略而不是漏处理
+    with contextlib.suppress(tokenize.TokenError, IndentationError):
         # tokenize 词法标记流自动排除字符串与 f-string 内的 # 符号
         for token in tokenize.generate_tokens(io.StringIO(source).readline):
             # 只收 COMMENT token:它已经由词法器从字符串、f-string、正则里区分出来了
             if token.type == tokenize.COMMENT:
                 rows.add(token.start[0])
-    except (tokenize.TokenError, IndentationError):
-        pass  # 语法已由 ast.parse 把关,这里只做尽力而为
     return rows
 
 

@@ -15,7 +15,7 @@ from core.model import ConditionFact, FunctionFact, SimpleFact
 
 from . import docstrings
 
-# 赋值右侧算「算出来的」的表达式类型 —— 字面量赋值没什么可解释的
+# 右侧算「算出来的」的表达式类型 —— 字面量赋值没什么可解释的
 _COMPUTED_ASSIGN = (ast.BinOp, ast.Call, ast.IfExp, ast.Compare)
 
 # return 一个算式才要求注释:`return x` / `return None` 不算

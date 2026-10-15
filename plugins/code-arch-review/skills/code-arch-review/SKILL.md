@@ -76,6 +76,7 @@ python "${CLAUDE_SKILL_DIR}/scripts/check.py" <路径...>
 | `duplicate-toplevel` | ✅ | ✅ | ⚠️ 仅 `var`/`function` | — | ✅ 同块头重定义 |
 | `silent-except` | ✅ | ✅ | ✅ | — | — |
 | `dict-as-type` | ✅ | — | ⚠️ 仅 TS | — | — |
+| `test-syspath` / `no-collectable-test` / `test-import-test` | ✅ | — | — | — | — |
 
 `⬜` 与 `—` 的区别:Bash 那四条**已经实现**,默认关掉只因为 `if [ -f "$f" ]` 这类检查密度太高,
 逐条要求注释会让人把闸关掉 —— 要开就在 `scripts/lang/registry.py` 删掉 `_SHELL_DISABLED` 里的名字。
@@ -125,6 +126,15 @@ PowerShell 另关了一条 `dict-as-type`:`$obj.A` / `$obj.B` 既可能是哈希
 | `flat-package` | 一层平铺 > 7 个模块 | 一眼扫不完等于没有导航 |
 | `duplicate-basename` | 同名模块出现在多个目录 | import 谁靠猜 |
 | `duplicate-toplevel` | 顶层同名定义两次 | 后定义的**静默胜出**,两份不一致时无人说话 |
+| `test-syspath` | 测试文件改 `sys.path` | 「测的是哪一份代码」变成取决于执行顺序 |
+| `no-collectable-test` | 测试模块里零个可收集用例 | 名字改了、整类被跳过,而**没有任何东西会告诉你这批用例不在跑** |
+| `test-import-test` | 测试模块之间互相 import | 共享工具该进 `conftest.py` 或非 `test_` 命名的模块 |
+
+测试这三条**只对测试模块生效**,判据两级:**目录判归属**(路径含 `test`/`tests`/`testing`)、
+**文件名判是不是测试模块**(pytest `python_files` 默认值)。`tests/helpers.py` 在测试目录里
+但不是测试模块,三条一条都不套 —— 混成一级是这套判据最容易写错的地方。
+不按「有没有 `unittest.TestCase` 子类」判:继承链跨模块、类被 `as` 改名都是常事,判不准。
+依据与实测误报见 `references/languages.md`。
 
 ## 验收判据是两个
 

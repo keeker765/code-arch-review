@@ -224,3 +224,33 @@ def is_blank(line):
         去掉首尾空白后为空时为 True。
     """
     return not line.strip()
+
+
+def explained(facts, row, accepts_inline):
+    """某个构造是否已经被解释过。**全引擎唯一的注释判据**,违规与覆盖率共用。
+
+    🔴 这个函数放在这里而不是 `core.rules` 里,是因为它的输入是**行号集合**,
+    不是规则知识 —— 与上面几个「哪些行有注释」的函数同源。原实现把违规判据与
+    覆盖率判据各写一份,分叉过一次(整个 `if` 只看前一行、行尾注释判断写反),
+    **而分叉时违规数与覆盖率都不报错**。收在一个模块里,分叉在结构上不可能发生。
+
+    Args:
+        facts: 该文件的事实。
+        row: 构造所在行号,1 基。
+        accepts_inline: 这条规则是否接受**行尾**注释。
+
+    Returns:
+        上方有独立整行注释,或(该规则接受行尾注释且本行有行尾注释)时为 True。
+    """
+    # 独立整行注释在构造的上一行 —— 条件/循环/抛异常只认这一种
+    if row - 1 in facts.whole_line_rows:
+        return True
+    # 只有接受行尾注释的规则才看本行;字段与赋值一行放得下,所以接受
+    if (
+        # 当前规则允许行尾注释(如字段与算式赋值)
+        accepts_inline
+        # 当前物理行本身包含注释标记
+        and row in facts.comment_rows
+    ):
+        return True
+    return False

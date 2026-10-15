@@ -26,7 +26,7 @@ from core import package, report          # noqa: E402
 from core.rules import evaluate           # noqa: E402
 from lang import registry                 # noqa: E402
 
-# 遍历源码树时要跳过的目录。这些不是「作者写的代码」,扫它们只会淹没真信号。
+# 源码树扫描时要跳过的目录。这些不是「作者写的代码」,扫它们只会淹没真信号。
 _SKIP_DIRS = frozenset({
     '__pycache__', '.git', '.hg', '.svn', 'node_modules', '.venv', 'venv',
     '.mypy_cache', '.pytest_cache', '.ruff_cache', 'dist', 'build', '.tox',
@@ -159,6 +159,9 @@ def run(paths, args):
         findings.extend(item for item in
                         package.package_shape(targets, overrides[language.name].max_modules,
                                               language.reserved)
+                        if item.rule not in language.disabled_rules)
+        # 测试模块互相 import 是跨文件判据:要拿本次扫到的全部测试模块名当白名单
+        findings.extend(item for item in package.test_imports(facts_list)
                         if item.rule not in language.disabled_rules)
     return findings, len(all_facts), failed, covered, total, report.density(all_facts), unknown
 

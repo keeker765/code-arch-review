@@ -140,6 +140,14 @@ class FileFacts:
         layout_gaps: 顶层与类内定义间空行不足的位置,元素是 (行号, 定义名, 实际空行数, 需要的空行数)。
         heuristic: 本文件的结构度量是否来自启发式。True 时报告会标出来,
             且结构度量三条不参与退出码(见 references/languages.md 的启发式纪律)。
+        test_kind: 这个文件属于哪一类测试相关文件(`''` / `'module'` / `'conftest'` /
+            `'helper'`)。**判据是语言知识**,由后端给(见 `lang/python/tests.py`)——
+            规则引擎只认这个分类,不自己判「什么算测试」。目前只有 Python 后端填,
+            其余语言留空串,于是测试规则在那些语言上不触发。
+        collectable: 会被测试框架收集的用例个数,判 `no-collectable-test` 用。
+        syspath_lines: 改 `sys.path` 的语句行号,判 `test-syspath` 用。
+        imports: `[(行号, 顶层模块名)]`。跨文件的规则要拿它去比对本次扫到的
+            测试模块名,所以**只记顶层名** —— 全路径比对会漏掉 `from tests.test_x import`。
     """
 
     path: object                    # 源码文件 Path 对象或标识路径
@@ -160,6 +168,10 @@ class FileFacts:
     flat_runs: list[tuple[int, int]] = field(default_factory=list) # 连续无注释平铺代码段起点与长度列表
     layout_gaps: list[tuple[int, str, int, int]] = field(default_factory=list) # 顶层定义间空行不达标位置三元组列表
     heuristic: bool = False                                    # 解析精度分档标志,启发式模式下不拦截结构违规
+    test_kind: str = ''                                        # 测试相关分类:空串/conftest/helper/module
+    collectable: int = 0                                       # 会被测试框架收集的用例数
+    syspath_lines: list[int] = field(default_factory=list)     # 改 sys.path 的语句物理行号集合
+    imports: list[tuple[int, str]] = field(default_factory=list) # 导入声明 (行号, 顶层模块名) 列表
 
 
 @dataclass(frozen=True)

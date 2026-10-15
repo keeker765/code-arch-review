@@ -1,17 +1,23 @@
 """语言无关的规则引擎:吃 `model.FileFacts`,吐违规与覆盖率。
 
 **为什么违规与覆盖率必须由同一个函数算出**:这两项从前各自由一套谓词算
-(一个走 `scan()` 的分支,一个走 `_coverage()` 的分支),一度分叉过 ——
+(一个走扫描的分支,一个走覆盖率的分支),一度分叉过 ——
 整个 `if` 只看前一行、行尾注释判断写反 —— 而**分叉时两个数都不报错**,
-读者无法判断哪个是真的。合并之后,两者共用 `_explained()` 这一个判据,
-分叉在结构上不可能再发生。
+读者无法判断哪个是真的。
+
+合并之后判据只剩两份,各在一个地方:**`text.explained()`** 判「这一行算不算已解释」
+(本模块与 `coverage` 都调它),**`RULES`** 判「这条为什么是坏味道」(本模块与
+`package` / `report` 都读它)。数分母的活单独在 `core/coverage.py`,它只数数,
+判据仍调上面那一份,所以分叉在结构上不可能再发生。
 
 `evaluate()` 只做编排:每一组规则的判据各自成函数,主流程只呈现阶段。
 """
 
 from dataclasses import dataclass, field
 
+from . import coverage
 from .model import FileFacts, Finding
+from .text import explained
 
 RULES = {
     'long-function':   '函数体过长 —— 主流程该只呈现阶段,阶段内容归各自的方法',
@@ -52,6 +58,15 @@ RULES = {
                        '什么前提下成立、边界在哪」;非平凡函数/类必须在摘要之后另起解释段',
     'docstring-sections': '文档注释缺必需小节 —— 应给出足够信息,'
                           '使人不看一行实现就能写出调用',
+    'test-syspath': '测试代码改了 `sys.path` —— 「测的是哪一份代码」变成取决于执行顺序,'
+                    '在 CI 里表现为莫名其妙的通过或失败;用 pytest 的 `pythonpath` 配置项'
+                    '或 `--import-mode=importlib`,不要手改路径',
+    'no-collectable-test': '测试模块里没有一个能被收集的用例 —— 文件看着是测试、'
+                           '测试框架一个都不收;重构时改了函数名或整类被跳过时,'
+                           '没有任何东西会告诉你这批用例已经不在跑了',
+    'test-import-test': '测试模块之间互相 import —— 共享测试工具该进 `conftest.py` '
+                        '或一个非 `test_` 命名的模块;`--import-mode=importlib` 下'
+                        '测试模块根本不能被 import,现在能跑只说明还没换模式',
 }
 
 # 这三条量的是结构形状,启发式后端上会误报 ⇒ 只报不拦(见 references/languages.md)。
@@ -91,34 +106,6 @@ class Outcome:
     findings: list = field(default_factory=list)  # 该文件命中的全部违规项列表
     covered: int = 0                              # 已写明注释的语法构造总数(分子)
     total: int = 0                                # 必须写注释的语法构造总数(分母)
-
-
-def _explained(facts, row, accepts_inline):
-    """某个构造是否已经被解释过。**全引擎唯一的注释判据**,违规与覆盖率共用。
-
-    统一检查目标代码行上一行是否存在独立整行注释;对于允许行尾注释的语法构造,
-    同时检查当前物理行是否包含行尾注释。
-
-    Args:
-        facts: 该文件的事实。
-        row: 构造所在行号,1 基。
-        accepts_inline: 这条规则是否接受**行尾**注释。
-
-    Returns:
-        上方有独立整行注释,或(该规则接受行尾注释且本行有行尾注释)时为 True。
-    """
-    # 独立整行注释在构造的上一行 —— 条件/循环/抛异常只认这一种
-    if row - 1 in facts.whole_line_rows:
-        return True
-    # 只有接受行尾注释的规则才看本行;字段与赋值一行放得下,所以接受
-    if (
-        # 当前规则允许行尾注释(如字段与算式赋值)
-        accepts_inline
-        # 当前物理行本身包含注释标记
-        and row in facts.comment_rows
-    ):
-        return True
-    return False
 
 
 def _label(fn):
@@ -270,20 +257,20 @@ def _check_commented(facts, add):
     # 字段是「这个数是什么、什么单位」的唯一落点;只有名字读者得去猜
     for field_fact in facts.fields:
         # 类/数据类字段既无上方独立注释也无行尾注释
-        if not _explained(facts, field_fact.line, True):
+        if not explained(facts, field_fact.line, True):
             add(field_fact.line, 'uncommented-field',
                 f'字段 {field_fact.label} 缺注释(单位/口径/范围)')
 
     # 算出来的变量:名字说「是什么」,注释才说「怎么来的」。字面量赋值不算
     for assigned in facts.assigns:
         # 经计算或调用得出的赋值既无上方独立注释也无行尾注释
-        if not _explained(facts, assigned.line, True):
+        if not explained(facts, assigned.line, True):
             add(assigned.line, 'uncommented-assign', f'{assigned.label} 由计算得出,上方缺注释')
 
     # return 一个算式:调用方拿到的口径必须写出来,不能靠读表达式反推
     for returned in facts.returns:
         # 包含算式的 return 既无上方独立注释也无行尾注释
-        if not _explained(facts, returned.line, True):
+        if not explained(facts, returned.line, True):
             add(returned.line, 'uncommented-return', 'return 算式上方缺注释,写明返回值口径')
 
     # 空异常块让失败态与正常态同形 —— 最难查的一类 bug
@@ -394,6 +381,27 @@ def _check_functions(facts, thresholds, add):
         _check_shape(fn, thresholds, add)
 
 
+def _check_tests(facts, add):
+    """判测试特有的两条单文件规则。
+
+    **只对测试模块生效**(`test_kind == 'module'`):`conftest.py` 与测试目录里的共享辅助
+    既不提供用例也不该被要求提供用例,拿这两条去套它们全是误报。
+
+    Args:
+        facts: 该文件的事实。
+        add: 记一条违规的回调。
+    """
+    # 不是测试模块就整段跳过 —— 分类由语言后端给,这里只认分类
+    if facts.test_kind != 'module':
+        return
+    # 逐行报:一个文件里可能在几处各改了一次路径,读者要分别去处理
+    for row in facts.syspath_lines:
+        add(row, 'test-syspath', '改 sys.path 让被测代码取决于执行顺序')
+    # 零个可收集用例才报:分母是「会不会被收集」,不是「写了多少函数」
+    if facts.collectable == 0:
+        add(1, 'no-collectable-test', '测试模块里没有名字能被收集的用例')
+
+
 def evaluate(facts: FileFacts, thresholds: Thresholds, disabled=frozenset()) -> Outcome:
     """判一个文件的全部规则,同时数出覆盖率。
 
@@ -417,68 +425,16 @@ def evaluate(facts: FileFacts, thresholds: Thresholds, disabled=frozenset()) -> 
         findings.append(Finding(str(facts.path), line, rule, detail, RULES[rule],
                                 heuristic=facts.heuristic))
 
-    # 依次执行模块级、分支条件、排版布局、核心注释与函数形态规则评估
+    # 模块级与分支条件:顶层结构、import、if/elif 的写法
     _check_module(facts, thresholds, add)
     _check_conditions(facts, add)
+    # 排版与注释:空行、行宽、循环/赋值/返回的说明是否到位
     _check_layout(facts, thresholds, add)
     _check_commented(facts, add)
+    # 函数接口文档,以及只对测试模块生效的那几条
     _check_functions(facts, thresholds, add)
+    _check_tests(facts, add)
 
     # 通过唯一注释判据统计该文件的已解释构造数与待解释构造总数
-    covered, total = _coverage(facts, disabled)
+    covered, total = coverage.tally(facts, disabled)
     return Outcome(findings=findings, covered=covered, total=total)
-
-
-def _coverage(facts: FileFacts, disabled=frozenset()):
-    """按统一口径统计该文件需解释构造与已解释构造数。
-
-    分母由代码结构严格决定,被禁用规则名下的构造不计入分母以防指标失真。
-    """
-    covered = 0
-    total = 0
-
-    def tally(row, accepts_inline):
-        """把一个构造计入分母,并判断它是否已被解释。
-
-        无条件累加总构造数,并通过全局统一判定口径检查目标行是否已有注释说明,
-        若已解释则同步累加已解释构造计数。
-
-        Args:
-            row: 构造所在代码行号。
-            accepts_inline: 是否允许行尾注释。
-        """
-        nonlocal covered, total
-        total += 1
-        # 命中唯一注释判定口径时,累计已解释构造计数
-        if _explained(facts, row, accepts_inline):
-            covered += 1
-
-    def tally_rule(rows, rule, accepts_inline):
-        """一条规则名下的全部构造计入分母;该规则被禁用时整批跳过。
-
-        根据语言特性配置检查规则是否已被禁用,未禁用时逐行调用 tally 累加构造统计。
-        被禁用的规则不计入分母,避免不可适用的规则拉低覆盖率。
-
-        Args:
-            rows: 目标构造的行号列表。
-            rule: 规则名称。
-            accepts_inline: 是否允许行尾注释。
-        """
-        # 规则在当前语言被明确禁用时,其名下的构造不计入分母
-        if rule in disabled:
-            return
-        # 构造行号已按规则去重,逐行由 tally 判定上方整行或行尾注释
-        for row in rows:
-            tally(row, accepts_inline=accepts_inline)
-
-    # 条件的口径是**每个子条件所在的行**,不是整个 if 节点 —— 与违规那一侧同口径
-    condition_rows = sorted({row for item in facts.conditions for row in item.operand_lines})
-    tally_rule(condition_rows, 'uncommented-condition', accepts_inline=False)
-    # 循环与抛异常只认上方独立整行注释
-    tally_rule([item.line for item in facts.loops], 'uncommented-loop', accepts_inline=False)
-    tally_rule([item.line for item in facts.raises], 'uncommented-raise', accepts_inline=False)
-    # 字段/赋值/算式 return 接受行尾注释,与违规那一侧同口径
-    tally_rule([item.line for item in facts.fields], 'uncommented-field', accepts_inline=True)
-    tally_rule([item.line for item in facts.assigns], 'uncommented-assign', accepts_inline=True)
-    tally_rule([item.line for item in facts.returns], 'uncommented-return', accepts_inline=True)
-    return covered, total

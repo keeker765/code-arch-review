@@ -137,6 +137,31 @@ def check_bad_fixtures():
     return passed, skipped
 
 
+def check_test_fixture():
+    """测试特有的三条规则必须**各报一次、且只报该报的**。
+
+    这个夹具是一整个目录而不是单文件,因为其中一条(`test-import-test`)是跨文件判据 ——
+    它要拿「本次扫到的另一个测试模块」当白名单,单文件跑不出这个场景。
+
+    🔴 断言里**必须包含阴性的一半**:`tests/helpers.py` 在测试目录里、也改了 `sys.path`,
+    但它不是测试模块,三条规则一条都不该命中它。只断言「报出了三条」的话,
+    一个把所有 `tests/` 下的文件都当测试模块的实现也会通过 —— 而那正是这套判据
+    最容易写错的地方(目录判归属 vs 文件名判是不是测试模块,混成一级)。
+
+    Returns:
+        该类样本的一行结论。
+    """
+    # 这一份是目录夹具:三条规则里有一条要跨文件才判得出来,单文件跑不出那个场景
+    out = run(HERE / 'fixture_tests')
+    expected = ('test-syspath', 'no-collectable-test', 'test-import-test')
+    # 三条各断言一次:「报出了违规」不等于「三条都报出来了」
+    for rule in expected:
+        assert f'[{rule}]' in out, f'夹具该报出 {rule},却没报:\n{out}'
+    # 阴性面:辅助模块不该出现在任何一条测试规则的明细里
+    assert 'helpers.py' not in out, f'helpers.py 不是测试模块,不该被测试规则命中:\n{out}'
+    return '测试规则阳性 3/3 且未误伤辅助模块'
+
+
 def main():
     """依次跑全部自检,任一条不成立就让它抛出(不吞异常)。
 
@@ -144,7 +169,7 @@ def main():
     任何一项失败立即抛出 AssertionError 中断流程,全绿时输出包含 SELFCHECK_OK 的状态串。
     """
     # 汇总核心覆盖率断言、阳性对照与多语言样本的校验结果
-    results = [check_python_fixture(), check_duplicate_fixture()]
+    results = [check_python_fixture(), check_duplicate_fixture(), check_test_fixture()]
     clean_ok, clean_skip = check_clean_fixtures()
     bad_ok, bad_skip = check_bad_fixtures()
     results.append(f'合规样本 0 违规:{", ".join(clean_ok) or "无"}')

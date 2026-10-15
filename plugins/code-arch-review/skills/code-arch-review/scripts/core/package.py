@@ -58,3 +58,43 @@ def package_shape(paths, max_modules, reserved):
             detail=f'{name} 出现在 {len(folders)} 个目录',
             why=RULES['duplicate-basename']))
     return found
+
+
+def test_imports(facts_list):
+    """测试模块之间互相 import 的判定。
+
+    **必须是跨文件规则**:判据是「import 的名字能不能解析到本次扫描到的另一个测试模块」,
+    单看一个文件分不出 `from test_options import ...`(同目录的兄弟测试模块,该报)
+    与 `from aiohttp.test_utils import ...`(第三方包名尾巴恰好带 `test_`,不该报)。
+
+    只比对**文件名主干**:`from tests.test_x import` 的顶层名是 `tests`,不是 `test_x`,
+    而 `from test_x import` 的顶层名才是模块本身 —— 两种写法都指向同一个测试模块,
+    所以两侧都按「文件名去掉 .py」归一后再比。
+
+    Args:
+        facts_list: 本次扫描到的全部文件事实。
+
+    Returns:
+        违规列表。
+    """
+    # 先收齐本次扫到的测试模块主干名,再拿它当白名单去比对导入
+    test_modules = {facts.path.stem for facts in facts_list if facts.test_kind == 'module'}
+    found = []
+    # 白名单已经收齐,逐个文件看它导入了谁;遍历顺序不影响结果,报出顺序按扫描顺序
+    for facts in facts_list:
+        # 只查测试模块:辅助文件与 conftest 之间的导入是正常组织方式
+        if facts.test_kind != 'module':
+            continue
+        # 同一个模块名在多处出现时,按行号逐个报,便于读者定位
+        for line, name in facts.imports:
+            # 导入自己不算互相导入
+            if name == facts.path.stem:
+                continue
+            # 解析不到本次扫描内的测试模块 —— 是第三方包或普通模块,不报
+            if name not in test_modules:
+                continue
+            found.append(Finding(
+                path=str(facts.path), line=line, rule='test-import-test',
+                detail=f'import 了另一个测试模块 `{name}`',
+                why=RULES['test-import-test']))
+    return found

@@ -39,6 +39,39 @@
 | 函数定义 | `def` / `async def` | `function` / `filter` | 函数 / 箭头 / 方法 | **规则块** |
 | 保留文件名 | `__init__.py` `__main__.py` | — | `index.*` | — |
 
+## Python 的测试三条
+
+只有 Python 有。判据分两级,**混成一级必错**:
+
+| 判什么 | 怎么判 | 判错的后果 |
+|---|---|---|
+| 归属(是不是测试区) | 路径任一段 ∈ `test` / `tests` / `testing` | — |
+| 角色(是不是测试模块) | 文件名命中 `test_*.py` 或 `*_test.py` | 把 `tests/helpers.py` 当测试模块 → 误报零用例 |
+
+依据一律是 pytest 的 `python_files` / `python_functions` 默认值,不另立一套。
+
+| 规则 | 判据 | 实测(2026-10-15) |
+|---|---|---|
+| `test-syspath` | `sys.path.insert(...)` / `.append(...)` 的调用行 | 7 个仓库 177 个测试文件 0 命中 |
+| `no-collectable-test` | 模块命名空间里 `test*` / `Test*` 的绑定数为 0 | 16 个真实 `tests/` 剩 1 命中(dill 的脚本式测试模块,确实零收集项) |
+| `test-import-test` | import 的顶层名解析到**本次扫描到的**另一个测试模块 | 4 命中全是 dill 的 `import test_mixins as module` 式真缺陷 |
+
+**`no-collectable-test` 只按名字数,不判类会不会被收走**:pytest 收的是所有
+`unittest.TestCase` 子类,而继承链可能跨模块(`class FilesConfigTest(base.BaseTestCase)`
+的基类在 pbr 包里又继承 testtools)、类可能被 `as` 改名
+(`from unittest import TestCase as NonLeakingTestCase`)—— 静态判不准。
+起先按「直接基类里有没有 `TestCase`」判,实测在 16 个目录上误报 5 处,改成按名字数之后归零。
+同理**不按「有没有 TestCase 子类」判是不是测试文件**:那样会把 `tests/base.py` 这种
+共享基类当成测试模块,连带让别的模块 `from .base import ...` 撞上 `test-import-test`。
+绑定要连**块体内**的算(`if cond: def test_x()` 与 `TestDraft = Suite().to_testcase()`
+这两种写法 pytest 都收),所以数名字时要走进 `if` / `try` / `with` / 循环的块体。
+
+**不做的**(依据不足或与 linter 重复,`references/rationale.md` 有完整清单):
+`tests/` 要不要 `__init__.py`(pytest 官方两处文档自相矛盾,实测 10 个仓库 7:3)、
+单元/集成/e2e 要不要分目录(零权威依据,httpx 用 marker 不分目录)、
+`Test` 类不得有 `__init__`(pytest 自己就发警告)、测试函数必须有断言
+(实测 56 命中里近半是合法写法:断言在 helper 里、或不抛异常即通过)。
+
 # 各语言要点
 
 ## PowerShell
