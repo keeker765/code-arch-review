@@ -38,7 +38,9 @@ from . import one            # from . import 形式
 
 共享逻辑的落点:**下沉到子包**（如 `pkg/_internal/`）,而不是横向引用。
 入口脚本与判据模块必须同目录时,在文件头写
-`# py-structure: allow-sibling-imports` 声明豁免;除这个场景外不要用。
+`# py-structure: allow-sibling-imports` 声明豁免;豁免的是**同层耦合**这件事,
+裸名、全路径、一级相对导入三种写法一起放行,导入顺序仍然照查。除这个场景外不要用。
+指向父包的相对导入不在这条豁免里,仍按 Google 2.2.4 报。
 
 ## 平铺上限:一层最多 7 个模块
 

@@ -18,8 +18,8 @@ from pathlib import Path
 
 from core.model import FileFacts
 
-from .js_node import EXTS, LANGUAGE, facts_from_json, parse_with_node, usable
-from .js_fallback import facts_for as _fallback_facts
+from lang.javascript.js_node import EXTS, LANGUAGE, facts_from_json, parse_with_node, usable
+from lang.javascript.js_fallback import facts_for as _fallback_facts
 
 __all__ = ['EXTS', 'LANGUAGE', 'parse', 'parse_many']
 

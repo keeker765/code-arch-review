@@ -161,7 +161,7 @@ def _file_import_findings(facts, stems, dirname, is_package):
     siblings = stems - {facts.path.stem}
     # __init__.py 是包的公开出口,豁免平级互导
     is_init = facts.path.name == '__init__.py'
-    # 文件头声明豁免时只去掉平级互导;排序与一行多个仍然照查
+    # 文件头声明豁免时只去掉同层耦合;排序仍然照查
     allow_sibling = getattr(facts, 'allow_sibling_imports', False)
     ordered = []
     # 同一行同一规则只报一次
@@ -171,14 +171,16 @@ def _file_import_findings(facts, stems, dirname, is_package):
         found.append(Finding(
             path=str(facts.path), line=line, rule='multi-import',
             detail='一行写了多个 import', why=RULES['multi-import']))
-    # 非包目录、文件头声明豁免或 __init__.py 时不判平级互导
-    sibling_allowed = is_package and not is_init and not allow_sibling
+    # 相对导入按 Google 2.2.4 判,`__init__.py` 不豁免;只有文件头声明才放行
+    relative_allowed = is_package and not allow_sibling
+    # 绝对导入的同层耦合:`__init__.py` 的 re-export 与文件头声明都放行
+    sibling_allowed = relative_allowed and not is_init
     # 逐条顶层导入判平级互导,并攒排序素材
     for line, module, level, names in facts.import_details:
         # 相对导入:只有一级指向当前目录,里面的名字才可能是平级模块
         if level > 0:
-            # 豁免文件与 __init__.py 不判平级互导
-            if sibling_allowed:
+            # 相对导入的放行条件与绝对导入不同,单独判
+            if relative_allowed:
                 _check_relative(found, seen, facts, line, module, level, names, siblings)
             continue
         # 绝对导入:裸名与「包名.兄弟」都可能是平级互导

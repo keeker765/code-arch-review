@@ -33,7 +33,7 @@ import subprocess
 
 from core.model import BindingFact, ConditionFact, FileFacts, FunctionFact, SimpleFact
 
-from . import help as powershell_help
+from lang.powershell import help as powershell_help
 
 
 # 本后端认的扩展名:脚本(.ps1)、模块(.psm1)、模块清单(.psd1)
