@@ -136,6 +136,7 @@ PowerShell 另关了一条 `dict-as-type`:`$obj.A` / `$obj.B` 既可能是哈希
 | `long-module` | 单文件 > 500 行 | 见 `references/layout.md` |
 | `packed-layout` | 定义间空行不足 | 删空行把 `long-module` 闸做废;空行是段落 |
 | `flat-package` | 一层平铺 > 7 个模块 | 一眼扫不完等于没有导航 |
+| `sibling-import` | 同目录模块互导（`__init__.py` 豁免） | 依赖图变成网；**由回合结束提醒检查,不阻断**,见 `references/imports.md` |
 | `duplicate-basename` | 同名模块出现在多个目录 | import 谁靠猜 |
 | `duplicate-toplevel` | 顶层同名定义两次 | 后定义的**静默胜出**,两份不一致时无人说话 |
 | `test-syspath` | 测试文件改 `sys.path` | 「测的是哪一份代码」变成取决于执行顺序 |
@@ -182,6 +183,7 @@ python "${CLAUDE_SKILL_DIR}/selfcheck/run.py"
 | 写注释:if / raise / 循环 / 扁平段 / 变量与字段 / 踩过的坑 | `references/comments.md` |
 | 写文档注释:Google 分节、解释段要求、存量迁移 | `references/docstrings.md` |
 | 注释与文档的**内容**(为什么不是另一个方案 / 边界成对写 / 归属日期 / 标记分级) | `references/opus-style.md` |
+| **导入结构**:平级互导、相对导入、Google 2.2.4 / 2.3.3 / 3.13、回合结束提醒 | `references/imports.md` |
 | **各语言怎么查**:语法对照、档位边界、已知误报 | `references/languages.md` |
 | 建目录、拆包、分几层、单文件多长算长 | `references/layout.md` |
 | 规则依据,以及闸拦不住、必须人看的部分 | `references/rationale.md` |
