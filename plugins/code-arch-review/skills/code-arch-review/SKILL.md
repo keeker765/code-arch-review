@@ -27,7 +27,7 @@ python "${CLAUDE_SKILL_DIR}/scripts/check.py" <路径...>
 | 规则 | 阈值 | 防的是 | 分册 |
 |---|---|---|---|
 | `long-module` / `packed-layout` / `long-function` / `many-kwargs` / `deep-nesting` / `fat-rule-block` | 500 行 / 空行 / 60 行 / 5 个 / 4 层 / 30 条声明 | 上帝函数;删空行压行;一个选择器管太多事 | [layout](references/layout.md) · [languages](references/languages.md) |
-| `dict-as-type` / `uncommented-field` / `uncommented-assign` / `uncommented-return` / `uncommented-flat` | 4 键 / 每处 / 连续 5 条 | 字段含义与计算口径藏在名字里 | [comments](references/comments.md) |
+| `dict-as-type` / `uncommented-field` / `uncommented-assign` / `uncommented-return` / `uncommented-flat` | 4 键 / 每处 / 连续 5 条 | 字段含义与计算口径藏在名字里;注释要紧贴该行 | [comments](references/comments.md) |
 | `uncommented-condition` / `uncommented-loop` / `uncommented-raise` / `silent-except` | 每处 | 条件一行一注释;循环写遍历什么;失败态不许静默 | [comments](references/comments.md) |
 | `no-docstring` / `thin-docstring` / `docstring-sections` / `thin-module-doc` | 见分册 | 不看实现就能写出调用 | [docstrings](references/docstrings.md) |
 | `flat-package` / `duplicate-basename` / `duplicate-toplevel` | 7 个 / 跨目录重名 / 顶层重定义 | 扫不完等于没有导航;后定义静默胜出 | [layout](references/layout.md) |

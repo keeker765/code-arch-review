@@ -52,6 +52,20 @@ for row in rows:
 - **算式 return**:`return <算式>` 上方写返回值口径 —— 单位、正负号、边界。
   `return x` / `return None` / `return self.foo` 不要求。
 
+**位置边界**:注释必须紧贴被解释的那一行。写在 `try:` / `if:` 上方只解释了那个块,
+不解释块内第一条语句;闸按行号相邻判。
+
+```python
+# ❌ try 上方的注释不算给里面的赋值
+try:
+    balance = settle(order, balance)
+
+# ✅
+try:
+    # 扣款后的余额;失败时保持原值
+    balance = settle(order, balance)
+```
+
 **边界**:这三条防的是「读者得去猜」。注释重复代码等于没写 ——
 `# 把 a 和 b 相加` 能过闸,过不了 review。
 
