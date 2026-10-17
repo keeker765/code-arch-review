@@ -25,6 +25,7 @@ if row.geometry_status != 'ok' or row.fee_pips < config.min_fee_pips:
 ```
 
 `raise` 同理:上面一行独立注释,写明什么前提被破坏、调用方该怎么改。
+**注释必须紧贴 `raise` 这一行**;写在 `if` 上方只解释了条件,不算。
 异常消息面向运行时,注释面向读代码的人。
 
 ## 🔴 扁平代码 / 循环

@@ -30,12 +30,12 @@ sys.path.insert(0, str(_SCRIPTS))
 
 from core.rules import RULES  # noqa: E402
 
-# 入口必须短:它每轮都进 context,长一页就没人读完
-_MAX_SKILL_LINES = 90
+# 入口必须短:它每轮都进 context;95 是盲测后给例子留的上限
+_MAX_SKILL_LINES = 95
 # 分册只按需加载,但也别长到读不完
 _MAX_REF_LINES = 180
-# 入口至少要有的 Python 例子段数
-_MIN_EXAMPLES = 3
+# 入口至少要有的 Python 例子段数:一段完整函数 + 一段导入对照
+_MIN_EXAMPLES = 2
 # Markdown 链接的目标
 _LINK = re.compile(r'\]\(([^)]+)\)')
 # 反引号里的规则 id;必须带连字符,排除 `check.py` 与 `--exclude`

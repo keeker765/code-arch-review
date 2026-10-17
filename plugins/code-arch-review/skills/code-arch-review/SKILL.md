@@ -27,39 +27,44 @@ python "${CLAUDE_SKILL_DIR}/scripts/check.py" <路径...>
 | 规则 | 阈值 | 防的是 | 分册 |
 |---|---|---|---|
 | `long-module` / `packed-layout` / `long-function` / `many-kwargs` / `deep-nesting` / `fat-rule-block` | 500 行 / 空行 / 60 行 / 5 个 / 4 层 / 30 条声明 | 上帝函数;删空行压行;一个选择器管太多事 | [layout](references/layout.md) · [languages](references/languages.md) |
-| `dict-as-type` / `uncommented-field` / `uncommented-assign` / `uncommented-return` / `uncommented-flat` | 4 键 / 每处 / 连续 5 条 | 字段含义与计算口径藏在名字里;注释要紧贴该行 | [comments](references/comments.md) |
-| `uncommented-condition` / `uncommented-loop` / `uncommented-raise` / `silent-except` | 每处 | 条件一行一注释;循环写遍历什么;失败态不许静默 | [comments](references/comments.md) |
-| `no-docstring` / `thin-docstring` / `docstring-sections` / `thin-module-doc` | 见分册 | 不看实现就能写出调用 | [docstrings](references/docstrings.md) |
+| `dict-as-type` / `uncommented-field` / `uncommented-assign` / `uncommented-return` / `uncommented-flat` | 4 键 / 每处 / 连续 5 条 | 字段含义与计算口径藏在名字里;注释紧贴该行,`if`/`try` 上方不算 | [comments](references/comments.md) |
+| `uncommented-condition` / `uncommented-loop` / `uncommented-raise` / `silent-except` | 每处 | 条件一行一注释;循环写遍历什么;raise 注释紧贴 raise;失败态不许静默 | [comments](references/comments.md) |
+| `no-docstring` / `thin-docstring` / `docstring-sections` / `thin-module-doc` | 见分册 | 不看实现就能写出调用;摘要后必须有解释段(类也一样) | [docstrings](references/docstrings.md) |
 | `flat-package` / `duplicate-basename` / `duplicate-toplevel` | 7 个 / 跨目录重名 / 顶层重定义 | 扫不完等于没有导航;后定义静默胜出 | [layout](references/layout.md) |
-| `sibling-import` / `import-order` / `multi-import` | 包内禁互导 / Google 3.13 | 依赖成网;导入分组可读 | [imports](references/imports.md) |
+| `sibling-import` / `import-order` / `multi-import` | 包内禁互导 / future→stdlib→其余,组内字典序 / 每行一个 | 依赖成网;导入顺序可读 | [imports](references/imports.md) |
 | `test-syspath` / `no-collectable-test` / `test-import-test` | 仅测试模块 | 测哪份代码靠猜;用例静默不跑 | [languages](references/languages.md) |
 
 ## 最小例子
 
 ```python
-# ❌ 条件挤行,且没有独立注释
-if row.ok and row.fee > 0: ...
+def settle(order, balance):
+    """结算订单,返回扣款后的余额。
 
-# ✅ 一个条件一行,每行上方独立注释
-if (
-    # 几何缺失 ⇒ 开不出仓
-    row.ok
-    # 费用为 0 ⇒ 没有经济意义
-    and row.fee > 0
-): ...
+    手续费在成交时锁定;余额不足时整笔拒绝,不做部分扣款。
+
+    Args:
+        order: 待结算的订单。
+        balance: 结算前余额,单位分。
+
+    Returns:
+        扣款后的余额,单位分。
+    """
+    # 状态不是 open ⇒ 不可结算
+    if order.status != "open":
+        # 前提被破坏:没有可结算的量
+        raise ValueError(order.order_id)
+    # 扣款后的余额;失败时保持原值
+    balance = balance - order.total
+    return balance
 ```
 
 ```python
-# ❌ 一行式文档:把函数名重复了一遍
-def settle(order):
-    """结算订单。"""
-
-# ✅ 摘要 + 解释段:写清为什么与边界
-def settle(order):
-    """结算订单,按成交价扣双边手续费。
-
-    手续费在成交时锁定,不随之后的价格更新变化。
-    """
+for order in orders:
+    try:
+        # 扣款后的余额;失败时保持原值
+        balance = settle(order, balance)
+    except ValueError:
+        continue
 ```
 
 ```python
