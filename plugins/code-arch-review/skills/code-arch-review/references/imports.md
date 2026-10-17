@@ -51,9 +51,9 @@ from . import one            # from . import 形式
 ## 提醒怎么工作
 
 - 触发:**Stop**（回合结束）,不挂在 Write/Edit 上 —— 结构要看这一轮最终把树改成了什么样。
-- 输出:`decision: block` + `reason` + exit 0。**回合被拦下**,模型收到问题列表后
-  必须继续修,不是只给用户看一眼。
-- `stop_hook_active` 为真时静默退出,避免「拦下 → 继续 → 又拦下」的死循环,只拦一次。
+- 输出:`systemMessage` + exit 0。**只附带提醒给用户看,不继续对话、不阻断停止**;
+  没有 `decision: block`,也没有 `additionalContext`。
+- `stop_hook_active` 为真时静默退出,避免和别的拦截钩子叠加刷屏。
 - 扫描上限:默认 500 个 `.py`;达到上限会在末尾注明「剩余文件未检查」。
 - 跳过目录:`.git`、`__pycache__`、`.venv`、`node_modules`、`vendor`、`site-packages`、
   `build`、`dist` 等生成物与第三方副本。
@@ -62,7 +62,7 @@ from . import one            # from . import 形式
 
 ## 改导入时的顺序
 
-1. 先按 Google 3.13 分组并排序;能用 `isort` 就先用。
+1. 先跑 `check.py --fix <路径>`（底层是 ruff 的 isort 规则）自动分组排序；没有 ruff 就手动排。
 2. 同目录模块之间改成「下沉到子包」,不要换一种写法继续横向导。
 3. 相对导入改完整包名;`__init__.py` 也一样。
 4. 最后跑 `check.py`,目标 0 违规。

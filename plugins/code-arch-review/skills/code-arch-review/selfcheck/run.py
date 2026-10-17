@@ -15,6 +15,7 @@
 import pathlib
 import subprocess
 import sys
+import tempfile
 
 import doccheck
 
@@ -209,6 +210,34 @@ def check_import_structure():
     return '导入结构阳性/阴性/单文件展开/脚本目录 4/4'
 
 
+def check_fix_mode():
+    """`--fix` 必须真的把导入排好,不能只打印成功。
+
+    修完的文件要自己再扫一遍,以闸的判据为准 —— 工具说「已处理」不算数。
+
+    Returns:
+        该类样本的一行结论;没有 ruff 时返回跳过说明。
+    """
+    # 在临时目录里复制夹具:--fix 会改文件,不能动仓库里的样本
+    with tempfile.TemporaryDirectory() as folder:
+        # 本次要修的副本
+        target = pathlib.Path(folder) / 'order.py'
+        # 夹具原文写到副本里
+        target.write_text((HERE / 'fixture_fix' / 'order.py').read_text(encoding='utf-8'),
+                          encoding='utf-8')
+        # 先跑一次 --fix
+        fixed = subprocess.run([sys.executable, str(CHECK), '--fix', str(target)],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        # 没有 ruff 就显式跳过,不算通过
+        if '需要 ruff' in fixed.stdout:
+            return '⚠ 跳过(--fix 需要 ruff)'
+        # 修完再扫:导入顺序规则必须消失
+        out = run(target)
+        assert '[import-order]' not in out, f'--fix 没有排好导入顺序:\n{out}'
+        assert '0 处违规' in out, f'--fix 后的样本仍有违规:\n{out}'
+    return '--fix 自动排序 1/1'
+
+
 def main():
     """依次跑全部自检,任一条不成立就让它抛出(不吞异常)。
 
@@ -218,7 +247,7 @@ def main():
     """
     # 汇总核心覆盖率断言、阳性对照、多语言样本与文档结构的校验结果
     results = [check_python_fixture(), check_duplicate_fixture(), check_test_fixture(),
-               check_import_structure(), doccheck.check()]
+               check_import_structure(), check_fix_mode(), doccheck.check()]
     clean_ok, clean_skip = check_clean_fixtures()
     bad_ok, bad_skip = check_bad_fixtures()
     results.append(f'合规样本 0 违规:{", ".join(clean_ok) or "无"}')

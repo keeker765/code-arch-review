@@ -4,7 +4,7 @@
 dict 当接口、深嵌套、没有文档的公开类。这些 linter 一条都不查。
 
 用法:
-    python <skill目录>/scripts/check.py <路径...> [--max-body 60] [--json]
+    python <skill目录>/scripts/check.py <路径...> [--max-body 60] [--json] [--fix]
 
 退出码 1 = 有违规(启发式档的结构度量三条只报不拦,不计入退出码),可直接当 CI / 交付闸。
 一个目标都没匹配到时**报错退出**,不让空集冒充通过。
@@ -14,6 +14,7 @@ import argparse
 from dataclasses import replace
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 # 本文件是包的入口,要先把 scripts/ 放进搜索路径,后面的 core / lang 才导入得到。
@@ -89,6 +90,37 @@ def discover(paths, skip_dirs):
     return sorted(set(found)), unknown
 
 
+def fix_imports(files):
+    """用 ruff 的 isort 规则自动排好 Python 文件的导入顺序。
+
+    只处理 `.py`:其它语言的导入语法不同,ruff 也不认。ruff 缺失时**明确报错退出**,
+    不能把「没修」当成「已修」;退出码 1 表示还有未修复项,继续扫就是为了把它们报出来。
+
+    Args:
+        files: 本次扫描到的目标文件。
+    """
+    # 只有 Python 文件归 ruff 管
+    targets = [str(item) for item in files if item.suffix == '.py']
+    # 没有 Python 文件就没什么可修的
+    if not targets:
+        return
+    # 先探一次 ruff:缺工具时要给出安装命令,而不是静默跳过
+    probe = subprocess.run([sys.executable, '-m', 'ruff', '--version'],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    # 探不到 ruff 就停下,让调用方装好再来
+    if probe.returncode != 0:
+        sys.exit('--fix 需要 ruff:python -m pip install ruff')
+    # 一次传给 ruff:按全路径排序(不按 import/from 分两段),起一个进程就够
+    done = subprocess.run(
+        [sys.executable, '-m', 'ruff', 'check', '--select', 'I', '--fix', '--quiet',
+         '--config', 'lint.isort.force-sort-within-sections=true', *targets],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    # 退出码 1 表示还有未修复项,不是失败;其它非零才是工具本身出错
+    if done.returncode not in (0, 1):
+        sys.exit(f'--fix 失败(退出码 {done.returncode}):{done.stdout.strip()[:300]}')
+    print(f'--fix:ruff 已处理 {len(targets)} 个 Python 文件的导入顺序')
+
+
 def apply_overrides(languages, args):
     """把命令行给的阈值覆盖到每门语言上。
 
@@ -135,6 +167,9 @@ def run(paths, args):
     """
     # 默认跳过名单 + 调用方用 --exclude 声明的:后者是仓库里夹着生成物时的逃生口
     files, unknown = discover(paths, _SKIP_DIRS | frozenset(args.exclude))
+    # 开了 --fix 就先排导入,再扫;否则扫的是修之前的树
+    if args.fix:
+        fix_imports(files)
     ready, failed = registry.available()
     # 结合命令行显式传入的阈值参数,生成各可用语言最终生效的阈值映射字典
     overrides = apply_overrides(ready, args)
@@ -243,6 +278,8 @@ def main():
     parser.add_argument('--max-declarations', type=int, default=None)
     # 格式化输出选项:开启时以 JSON 结构输出原始违规列表
     parser.add_argument('--json', action='store_true')
+    # 先用 ruff 自动排导入,再扫描;缺 ruff 时明确报错
+    parser.add_argument('--fix', action='store_true')
     # 额外要跳过的目录名。可重复,判据与 _SKIP_DIRS 相同(整个目录名匹配)
     parser.add_argument('--exclude', action='append', default=[], metavar='目录名')
     # 命令行参数决定阈值覆写与输出模式,不合法入参由 argparse 内部拦截

@@ -17,7 +17,7 @@ description: 【强制,非可选】代码结构验收闸,用户 2026-09-08 定,2
 python "${CLAUDE_SKILL_DIR}/scripts/check.py" <路径...>
 ```
 
-退出码 1 = 有违规。只跑一次。纯 stdlib;PowerShell 要 `pwsh`,JS/TS 要 `node`。
+退出码 1 = 有违规。只跑一次。纯 stdlib;PowerShell 要 `pwsh`,JS/TS 要 `node`;`--fix` 用 ruff 自动排导入顺序。
 显式点名单个文件时,父目录有 `__init__.py` 就自动带上同层文件一起判。
 目录里一个可识别的目标都没有时**报错退出**,空集不算通过。
 跳过目录、`--exclude` 与各语言档位见 [languages.md](references/languages.md)。
