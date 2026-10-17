@@ -51,9 +51,9 @@ from . import one            # from . import 形式
 ## 提醒怎么工作
 
 - 触发:**Stop**（回合结束）,不挂在 Write/Edit 上 —— 结构要看这一轮最终把树改成了什么样。
-- 输出:`additionalContext` + exit 0。**不阻断**,没有 `deny`,没有 `decision: block`;
-  但模型会收到这段文字并**继续处理**,不是只给用户看一眼就收工。
-- `stop_hook_active` 为真时静默退出,避免「提醒 → 继续 → 又提醒」的循环。
+- 输出:`decision: block` + `reason` + exit 0。**回合被拦下**,模型收到问题列表后
+  必须继续修,不是只给用户看一眼。
+- `stop_hook_active` 为真时静默退出,避免「拦下 → 继续 → 又拦下」的死循环,只拦一次。
 - 扫描上限:默认 500 个 `.py`;达到上限会在末尾注明「剩余文件未检查」。
 - 跳过目录:`.git`、`__pycache__`、`.venv`、`node_modules`、`vendor`、`site-packages`、
   `build`、`dist` 等生成物与第三方副本。
