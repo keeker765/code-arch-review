@@ -1,5 +1,5 @@
-> 本文件由 `SKILL.md` 拆出,**不单独生效** —— 入口永远是 `SKILL.md`,
-> 它在对应位置指过来。拆分只是为了入口页能一眼读完。
+> 入口:[SKILL.md](../SKILL.md) —— 本文件不单独生效,它在对应位置指过来。
+> 相关:[opus-style.md](opus-style.md)(闸量不到的那一层)、[languages.md](languages.md)(各语言依据)。
 
 ## 闸拦不住的,必须人看
 

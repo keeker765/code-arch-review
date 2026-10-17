@@ -1,4 +1,4 @@
-"""目录级检查:平铺过多的包、跨目录重名的模块、平级互导与导入顺序。
+"""目录级检查:平铺过多的包、跨目录重名的模块、包内互导与导入顺序。
 
 这些都不是单文件能看出来的 —— 每个文件本身都合规,合在一起却无法导航或缠成网。
 所以它们**不参与覆盖率**:分母是「该解释的构造」,而这里量的是目录与依赖形状。
@@ -104,11 +104,13 @@ def test_imports(facts_list):
 
 
 def import_structure(facts_list, reserved):
-    """判同目录模块互导、导入分组顺序与一行多个 import。
+    """判包内模块互导、导入分组顺序与一行多个 import。
 
     这些判据要拿**同目录的其他文件**当白名单,所以是跨文件规则;只有后端填了
-    `import_details` 的语言才会命中(目前只有 Python)。`__init__.py` 豁免平级互导,
-    因为它是包的公开出口;相对导入指向前目录时按平级导入处理。
+    `import_details` 的语言才会命中(目前只有 Python)。`sibling-import` 只对
+    **有 `__init__.py` 的包目录**生效 —— 脚本目录里 `run.py` 导入同层的 `helper.py`
+    是正常组织方式,不是依赖成网。`__init__.py` 豁免平级互导,因为它是包的公开出口;
+    相对导入指向包内同层模块时按平级导入处理。
 
     Args:
         facts_list: 本次扫描到的全部文件事实。
@@ -127,25 +129,29 @@ def import_structure(facts_list, reserved):
     found = []
     # 逐目录判:同层的模块名集合是这一层所有文件共享的白名单
     for folder, members in sorted(groups.items(), key=lambda item: str(item[0])):
-        # 本层非保留模块的主干名,作为平级互导的判据集合
-        stems = {item.path.stem for item in members if item.path.name not in reserved}
+        # 只有包目录才有平级互导问题;脚本目录不受这条约束
+        is_package = (folder / '__init__.py').is_file()
+        # 本层非保留模块的主干名;非包目录不需要白名单
+        stems = {item.path.stem for item in members if item.path.name not in reserved} \
+            if is_package else set()
         dirname = folder.name
         # 逐文件判:每个文件都要拿本层白名单比对
         for facts in members:
-            found.extend(_file_import_findings(facts, stems, dirname))
+            found.extend(_file_import_findings(facts, stems, dirname, is_package))
     return found
 
 
-def _file_import_findings(facts, stems, dirname):
+def _file_import_findings(facts, stems, dirname, is_package):
     """判一个文件的导入结构。
 
-    平级互导按「导入的模块是不是同目录的另一个文件」判;顺序判据只对绝对导入生效,
-    相对导入已经由平级互导覆盖,再按分组报一次只是重复。
+    平级互导按「导入的模块是不是同目录的另一个文件」判,只在包目录生效;
+    顺序判据只对绝对导入生效,相对导入已经由平级互导覆盖,再按分组报一次只是重复。
 
     Args:
         facts: 一个文件的事实。
-        stems: 同目录非保留模块主干名。
+        stems: 同目录非保留模块主干名;非包目录为空集。
         dirname: 当前目录名。
+        is_package: 该目录是不是包(有 `__init__.py`)。
 
     Returns:
         违规列表。
@@ -165,8 +171,8 @@ def _file_import_findings(facts, stems, dirname):
         found.append(Finding(
             path=str(facts.path), line=line, rule='multi-import',
             detail='一行写了多个 import', why=RULES['multi-import']))
-    # 文件头声明豁免或 __init__.py 时不判平级互导;先算好,主循环只做一层判断
-    sibling_allowed = not is_init and not allow_sibling
+    # 非包目录、文件头声明豁免或 __init__.py 时不判平级互导
+    sibling_allowed = is_package and not is_init and not allow_sibling
     # 逐条顶层导入判平级互导,并攒排序素材
     for line, module, level, names in facts.import_details:
         # 相对导入:只有一级指向当前目录,里面的名字才可能是平级模块

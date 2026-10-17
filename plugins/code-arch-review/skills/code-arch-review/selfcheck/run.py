@@ -16,6 +16,8 @@ import pathlib
 import subprocess
 import sys
 
+import doccheck
+
 HERE = pathlib.Path(__file__).resolve().parent
 # check.py 入口脚本绝对路径,用于 subprocess 驱动自身执行
 CHECK = HERE.parent / 'scripts' / 'check.py'
@@ -182,11 +184,12 @@ def check_test_fixture():
 
 
 def check_import_structure():
-    """导入结构三条规则必须有阳性、阴性与单文件展开三种对照。
+    """导入结构三条规则必须有阳性、阴性、单文件展开与脚本目录四种对照。
 
-    阳性:同目录导入必须报 `sibling-import`。阴性:`__init__.py` 的完整包名
+    阳性:包内同层导入必须报 `sibling-import`。阴性:`__init__.py` 的完整包名
     re-export 不算违规,合规包必须 0 违规。展开:只点名一个文件时,同层模块要
-    自动纳入,否则平级互导永远判不出来。
+    自动纳入,否则平级互导永远判不出来。脚本目录:没有 `__init__.py` 的目录
+    不受这条约束,同层导入必须放行。
 
     Returns:
         该类样本的一行结论。
@@ -200,18 +203,22 @@ def check_import_structure():
     # 单文件展开:只点名 beta.py,也要因为它所在的包而报出平级互导
     single = run(HERE / 'fixture_imports' / 'bad_pkg' / 'beta.py')
     assert '[sibling-import]' in single, f'单文件该自动带上同层模块:\n{single}'
-    return '导入结构阳性/阴性/单文件展开 3/3'
+    # 脚本目录没有 __init__.py,同层导入是正常组织,必须 0 违规
+    scripts = run(HERE / 'fixture_imports' / 'script_dir')
+    assert '0 处违规' in scripts, f'脚本目录的同层导入不该算平级互导:\n{scripts}'
+    return '导入结构阳性/阴性/单文件展开/脚本目录 4/4'
 
 
 def main():
     """依次跑全部自检,任一条不成立就让它抛出(不吞异常)。
 
-    包含 Python 满覆盖自检、duplicate-toplevel 阳性对照与各语言合规样本扫描。
-    任何一项失败立即抛出 AssertionError 中断流程,全绿时输出包含 SELFCHECK_OK 的状态串。
+    包含 Python 满覆盖自检、duplicate-toplevel 阳性对照、各语言合规样本扫描
+    与文档结构自检。任何一项失败立即抛出 AssertionError 中断流程,全绿时输出
+    包含 SELFCHECK_OK 的状态串。
     """
-    # 汇总核心覆盖率断言、阳性对照与多语言样本的校验结果
+    # 汇总核心覆盖率断言、阳性对照、多语言样本与文档结构的校验结果
     results = [check_python_fixture(), check_duplicate_fixture(), check_test_fixture(),
-               check_import_structure()]
+               check_import_structure(), doccheck.check()]
     clean_ok, clean_skip = check_clean_fixtures()
     bad_ok, bad_skip = check_bad_fixtures()
     results.append(f'合规样本 0 违规:{", ".join(clean_ok) or "无"}')

@@ -1,4 +1,5 @@
-> 本文件由 `SKILL.md` 拆出,**不单独生效** —— 入口永远是 `SKILL.md`。
+> 入口:[SKILL.md](../SKILL.md) —— 本文件不单独生效。
+> 相关:[comments.md](comments.md)(格式)、[docstrings.md](docstrings.md)(结构)、[rationale.md](rationale.md)(凭据)。
 
 # opus 写法 —— 闸量不到的那一层
 

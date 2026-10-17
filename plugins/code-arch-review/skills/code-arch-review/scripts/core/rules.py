@@ -68,7 +68,7 @@ RULES = {
     'test-import-test': '测试模块之间互相 import —— 共享测试工具该进 `conftest.py` '
                         '或一个非 `test_` 命名的模块;`--import-mode=importlib` 下'
                         '测试模块根本不能被 import,现在能跑只说明还没换模式',
-    'sibling-import': '同目录模块之间互相导入 —— 依赖图从一棵树变成一张网,'
+    'sibling-import': '包目录内模块之间互相导入 —— 依赖图从一棵树变成一张网,'
                       '改一个模块的导出会悄悄改掉另一个模块的行为;'
                       '共享逻辑下沉到子包,`__init__.py` 的 re-export 例外',
     'import-order': '导入分组顺序或组内字典序不合 Google 3.13 —— '

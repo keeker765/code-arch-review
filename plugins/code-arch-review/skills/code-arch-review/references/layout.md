@@ -1,4 +1,5 @@
-> 本文件由 `SKILL.md` 拆出,**不单独生效** —— 入口永远是 `SKILL.md`。
+> 入口:[SKILL.md](../SKILL.md) —— 本文件不单独生效。
+> 相关:[imports.md](imports.md)(包内依赖方向)、[languages.md](languages.md)(各语言阈值)。
 
 # 目录与拆分
 

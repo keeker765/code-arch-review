@@ -1,4 +1,5 @@
-> 本文件由 `SKILL.md` 拆出,**不单独生效** —— 入口永远是 `SKILL.md`。
+> 入口:[SKILL.md](../SKILL.md) —— 本文件不单独生效。
+> 相关:[comments.md](comments.md)(行内注释)、[opus-style.md](opus-style.md)(docstring 里该写什么)。
 
 # 文档注释
 
