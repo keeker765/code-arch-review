@@ -13,6 +13,7 @@ import ast
 
 from core.model import ConditionFact, FunctionFact, SimpleFact
 
+# py-structure: allow-sibling-imports —— Python 后端按职责拆在同目录
 from . import docstrings
 
 # 右侧算「算出来的」的表达式类型 —— 字面量赋值没什么可解释的

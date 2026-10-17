@@ -9,10 +9,10 @@
 """
 
 import os
+from pathlib import Path
 import shutil
 import subprocess
 import sys
-from pathlib import Path
 
 # typescript 包的位置可以用环境变量直接指过去:项目里没装、又不想全局装时用它。
 TS_ENV = 'CODE_ARCH_REVIEW_TS'

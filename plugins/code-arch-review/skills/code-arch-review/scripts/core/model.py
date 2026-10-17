@@ -148,6 +148,11 @@ class FileFacts:
         syspath_lines: 改 `sys.path` 的语句行号,判 `test-syspath` 用。
         imports: `[(行号, 顶层模块名)]`。跨文件的规则要拿它去比对本次扫到的
             测试模块名,所以**只记顶层名** —— 全路径比对会漏掉 `from tests.test_x import`。
+        import_details: `[(行号, 模块路径, 相对级别, 被导名字)]`。判 `sibling-import`
+            与 `import-order` 用;只有模块顶层导入进这里,函数内导入不参与结构判据。
+        multi_import_lines: `import a, b` 这类一行多个名字的行号,判 `multi-import` 用。
+        allow_sibling_imports: 文件头是否声明豁免平级互导(`py-structure: allow-sibling-imports`)。
+            入口脚本与判据模块天然同目录时用它;相对导入与排序仍然照查。
     """
 
     path: object                    # 源码文件 Path 对象或标识路径
@@ -172,6 +177,9 @@ class FileFacts:
     collectable: int = 0                                       # 会被测试框架收集的用例数
     syspath_lines: list[int] = field(default_factory=list)     # 改 sys.path 的语句物理行号集合
     imports: list[tuple[int, str]] = field(default_factory=list) # 导入声明 (行号, 顶层模块名) 列表
+    import_details: list[tuple[int, str, int, tuple[str, ...]]] = field(default_factory=list) # 顶层导入 (行号, 模块路径, 相对级别, 被导名字)
+    multi_import_lines: list[int] = field(default_factory=list)  # 一行多个名字的 import 行号
+    allow_sibling_imports: bool = False                          # 文件头声明豁免平级互导
 
 
 @dataclass(frozen=True)

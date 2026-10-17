@@ -11,10 +11,10 @@ dict 当接口、深嵌套、没有文档的公开类。这些 linter 一条都�
 """
 
 import argparse
-import json
-import sys
 from dataclasses import replace
+import json
 from pathlib import Path
+import sys
 
 # 本文件是包的入口,要先把 scripts/ 放进搜索路径,后面的 core / lang 才导入得到。
 # 这不是可以挪到文件顶部的风格问题 —— 导入必须先于路径设置。
@@ -68,6 +68,11 @@ def discover(paths, skip_dirs):
                 unknown.append(path)
             else:
                 found.append(path)
+                # 包目录里的单文件要把同层模块一起纳入:平铺与平级互导判据要看整层
+                if (path.parent / '__init__.py').exists():
+                    found.extend(sibling for sibling in path.parent.iterdir()
+                                 # 同层、受支持的文件才算上下文;目录在这里不递归
+                                 if sibling.is_file() and registry.detect(sibling) is not None)
             continue
         # 目录才递归展开,与显式单文件分开收集
         for candidate in path.rglob('*'):
@@ -209,6 +214,9 @@ def scan_language(language, targets, thresholds, failed):
                     if item.rule not in language.disabled_rules)
     # 测试模块互相 import 是跨文件判据:要拿本次扫到的全部测试模块名当白名单
     findings.extend(item for item in package.test_imports(facts_list)
+                    if item.rule not in language.disabled_rules)
+    # 同目录互导、导入顺序与一行多个 import:要拿整批事实一起看
+    findings.extend(item for item in package.import_structure(facts_list, language.reserved)
                     if item.rule not in language.disabled_rules)
     return findings, facts_list, covered, total
 

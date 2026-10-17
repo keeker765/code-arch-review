@@ -10,6 +10,7 @@
 import re
 
 from core.model import BindingFact, ConditionFact, SimpleFact
+# py-structure: allow-sibling-imports —— JS 降级层按职责拆在同目录
 from .js_expr import looks_computed
 from .js_text import RETURN_EXPR_RE, THROW_RE, balanced_span
 

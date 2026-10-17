@@ -17,12 +17,13 @@
 `js_env`,启发式那一档在 `js_fallback`。
 """
 
-import json
-import subprocess
 from dataclasses import replace
+import json
 from pathlib import Path
+import subprocess
 
 from core.model import BindingFact, ConditionFact, FileFacts, FunctionFact, SimpleFact
+# py-structure: allow-sibling-imports —— JS 后端按职责拆在同目录
 from .js_fallback import facts_for as _fallback_facts
 from .js_env import node_binary, note_once, typescript_dir
 

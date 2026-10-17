@@ -5,6 +5,7 @@
 所以报告里必须把「完整性看哪个」写出来,否则读者会去优化那个能被优化的数。
 """
 
+# py-structure: allow-sibling-imports —— 同目录判据模块是这个 skill 的结构
 from .rules import STRUCT_RULES
 
 # 说明密度低于这个数,基本可以判定「只有一行式文档,没有解释为什么」。

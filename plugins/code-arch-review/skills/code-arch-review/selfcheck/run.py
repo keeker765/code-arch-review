@@ -181,6 +181,28 @@ def check_test_fixture():
     return '测试规则阳性 3/3 且未误伤辅助模块'
 
 
+def check_import_structure():
+    """导入结构三条规则必须有阳性、阴性与单文件展开三种对照。
+
+    阳性:同目录导入必须报 `sibling-import`。阴性:`__init__.py` 的完整包名
+    re-export 不算违规,合规包必须 0 违规。展开:只点名一个文件时,同层模块要
+    自动纳入,否则平级互导永远判不出来。
+
+    Returns:
+        该类样本的一行结论。
+    """
+    # 阳性:坏包里 beta 导入了同目录的 alpha
+    bad = run(HERE / 'fixture_imports' / 'bad_pkg')
+    assert '[sibling-import]' in bad, f'坏包该报 sibling-import:\n{bad}'
+    # 阴性:合规包必须 0 违规
+    good = run(HERE / 'fixture_imports' / 'good_pkg')
+    assert '0 处违规' in good, f'合规包该是 0 违规:\n{good}'
+    # 单文件展开:只点名 beta.py,也要因为它所在的包而报出平级互导
+    single = run(HERE / 'fixture_imports' / 'bad_pkg' / 'beta.py')
+    assert '[sibling-import]' in single, f'单文件该自动带上同层模块:\n{single}'
+    return '导入结构阳性/阴性/单文件展开 3/3'
+
+
 def main():
     """依次跑全部自检,任一条不成立就让它抛出(不吞异常)。
 
@@ -188,7 +210,8 @@ def main():
     任何一项失败立即抛出 AssertionError 中断流程,全绿时输出包含 SELFCHECK_OK 的状态串。
     """
     # 汇总核心覆盖率断言、阳性对照与多语言样本的校验结果
-    results = [check_python_fixture(), check_duplicate_fixture(), check_test_fixture()]
+    results = [check_python_fixture(), check_duplicate_fixture(), check_test_fixture(),
+               check_import_structure()]
     clean_ok, clean_skip = check_clean_fixtures()
     bad_ok, bad_skip = check_bad_fixtures()
     results.append(f'合规样本 0 违规:{", ".join(clean_ok) or "无"}')

@@ -27,9 +27,9 @@ r"""PowerShell 后端:把 `.ps1` / `.psm1` / `.psd1` 翻译成语言无关的 `F
 import base64
 import json
 import os
+from pathlib import Path
 import shutil
 import subprocess
-from pathlib import Path
 
 from core.model import BindingFact, ConditionFact, FileFacts, FunctionFact, SimpleFact
 

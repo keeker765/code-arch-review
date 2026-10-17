@@ -2,8 +2,9 @@
 
 # 导入结构:平级互导与导入顺序
 
-依据 **Google Python Style Guide**。闸能查的用 `check.py`;`sibling-import` 这一条
-由**回合结束提醒**（Stop hook）给出,不阻断操作。
+依据 **Google Python Style Guide**。这三条由核心 CLI `check.py` 直接检查:
+`sibling-import`、`import-order`、`multi-import`。回合结束提醒与它同口径,
+只负责在 agent 忘记跑闸时补一刀。
 
 ## Google 原文四条
 
@@ -42,7 +43,9 @@ from . import one            # from . import 形式
 ## 提醒怎么工作
 
 - 触发:**Stop**（回合结束）,不挂在 Write/Edit 上 —— 结构要看这一轮最终把树改成了什么样。
-- 输出:`systemMessage` + exit 0。**只提醒,不阻断**,没有 `deny`,没有 `decision: block`。
+- 输出:`additionalContext` + exit 0。**不阻断**,没有 `deny`,没有 `decision: block`;
+  但模型会收到这段文字并**继续处理**,不是只给用户看一眼就收工。
+- `stop_hook_active` 为真时静默退出,避免「提醒 → 继续 → 又提醒」的循环。
 - 扫描上限:默认 500 个 `.py`;达到上限会在末尾注明「剩余文件未检查」。
 - 跳过目录:`.git`、`__pycache__`、`.venv`、`node_modules`、`vendor`、`site-packages`、
   `build`、`dist` 等生成物与第三方副本。

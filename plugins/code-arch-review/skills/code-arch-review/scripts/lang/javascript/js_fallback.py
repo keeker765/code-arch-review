@@ -12,10 +12,11 @@
 会超过单文件 500 行的硬闸 —— 这不是按行数切,是按「答案从哪来」切。
 """
 
-import re
 from pathlib import Path
+import re
 
 from core.model import FileFacts, FunctionFact
+# py-structure: allow-sibling-imports —— JS 降级层按职责拆在同目录
 from . import js_lines as lines
 from .js_mask import mask_source
 from .js_text import (

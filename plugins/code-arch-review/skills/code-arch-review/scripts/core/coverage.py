@@ -13,6 +13,7 @@
 数字,而那几条规则根本不拦,读者会以为这门语言遍地欠注释。
 """
 
+# py-structure: allow-sibling-imports —— 同目录判据模块是这个 skill 的结构
 from .text import explained
 
 

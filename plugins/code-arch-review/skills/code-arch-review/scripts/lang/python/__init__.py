@@ -10,7 +10,7 @@ from pathlib import Path
 
 from core.model import FileFacts
 
-from . import bindings, layout, structure, tests
+from . import bindings, imports, layout, structure, tests
 
 LANGUAGE = 'python'
 EXTS = ('.py',)
@@ -45,6 +45,8 @@ def parse(path: Path) -> FileFacts:
     loops, raises, fields, assigns, returns, silent = structure.simple_facts(tree)
     # 测试相关事实单独一次抽齐:分类、可收集用例数、改 sys.path 的行、导入的顶层模块名
     test_info = tests.test_facts(path, tree)
+    # 导入结构事实:顶层导入的模块路径、相对级别与被导名字
+    import_info = imports.import_facts(tree)
     return FileFacts(
         path=path,
         language=LANGUAGE,
@@ -67,7 +69,10 @@ def parse(path: Path) -> FileFacts:
         test_kind=test_info['test_kind'],
         collectable=test_info['collectable'],
         syspath_lines=test_info['syspath_lines'],
-        imports=test_info['imports'])
+        imports=test_info['imports'],
+        import_details=import_info['import_details'],
+        multi_import_lines=import_info['multi_import_lines'],
+        allow_sibling_imports='py-structure: allow-sibling-imports' in source)
 
 
 def parse_many(paths) -> list:

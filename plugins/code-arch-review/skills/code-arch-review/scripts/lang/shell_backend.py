@@ -6,9 +6,9 @@ bash 多两条它不认的规则。三条边界写在对应代码的位置上:he
 不算);行尾反斜杠与行尾 `&&` 是续行(按行数判会把一条条件算成两条);引号能跨物理行。
 """
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
+import re
 
 from core.model import ConditionFact, FileFacts, SimpleFact
 

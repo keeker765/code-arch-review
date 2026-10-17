@@ -89,6 +89,7 @@ python "${CLAUDE_SKILL_DIR}/scripts/check.py" <路径...>
 | `silent-except` | ✅ | ✅ | ✅ | — | — |
 | `dict-as-type` | ✅ | — | ⚠️ 仅 TS | — | — |
 | `test-syspath` / `no-collectable-test` / `test-import-test` | ✅ | — | — | — | — |
+| `sibling-import` / `import-order` / `multi-import` | ✅ | — | — | — | — |
 
 `⬜` 与 `—` 的区别:Bash 那四条**已经实现**,默认关掉只因为 `if [ -f "$f" ]` 这类检查密度太高,
 逐条要求注释会让人把闸关掉 —— 要开就在 `scripts/lang/registry.py` 删掉 `_SHELL_DISABLED` 里的名字。
@@ -136,7 +137,9 @@ PowerShell 另关了一条 `dict-as-type`:`$obj.A` / `$obj.B` 既可能是哈希
 | `long-module` | 单文件 > 500 行 | 见 `references/layout.md` |
 | `packed-layout` | 定义间空行不足 | 删空行把 `long-module` 闸做废;空行是段落 |
 | `flat-package` | 一层平铺 > 7 个模块 | 一眼扫不完等于没有导航 |
-| `sibling-import` | 同目录模块互导（`__init__.py` 豁免） | 依赖图变成网；**由回合结束提醒检查,不阻断**,见 `references/imports.md` |
+| `sibling-import` | 同目录模块互导（`__init__.py` 豁免） | 依赖图变成网；`check.py` 与回合结束提醒都会报，见 `references/imports.md` |
+| `import-order` | 分组顺序 / 组内字典序（Google 3.13） | 标准库写在外部导入之后，读者会把它当外部依赖 |
+| `multi-import` | `import a, b` 一行多个 | 排序与 diff 不可读（Google 3.13） |
 | `duplicate-basename` | 同名模块出现在多个目录 | import 谁靠猜 |
 | `duplicate-toplevel` | 顶层同名定义两次 | 后定义的**静默胜出**,两份不一致时无人说话 |
 | `test-syspath` | 测试文件改 `sys.path` | 「测的是哪一份代码」变成取决于执行顺序 |

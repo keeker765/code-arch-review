@@ -15,6 +15,7 @@
 
 from dataclasses import dataclass, field
 
+# py-structure: allow-sibling-imports —— 同目录判据模块是这个 skill 的结构
 from . import coverage
 from .model import FileFacts, Finding
 from .text import explained
@@ -67,6 +68,13 @@ RULES = {
     'test-import-test': '测试模块之间互相 import —— 共享测试工具该进 `conftest.py` '
                         '或一个非 `test_` 命名的模块;`--import-mode=importlib` 下'
                         '测试模块根本不能被 import,现在能跑只说明还没换模式',
+    'sibling-import': '同目录模块之间互相导入 —— 依赖图从一棵树变成一张网,'
+                      '改一个模块的导出会悄悄改掉另一个模块的行为;'
+                      '共享逻辑下沉到子包,`__init__.py` 的 re-export 例外',
+    'import-order': '导入分组顺序或组内字典序不合 Google 3.13 —— '
+                    'future → 标准库 → 第三方/本仓库,同组内按全路径字典序;'
+                    '标准库写在第三方之后,读者会误以为它是外部依赖',
+    'multi-import': '一行写了多个 import —— 每行一个,排序与 diff 才可读(Google 3.13)',
 }
 
 # 这三条量的是结构形状,启发式后端上会误报 ⇒ 只报不拦(见 references/languages.md)。
