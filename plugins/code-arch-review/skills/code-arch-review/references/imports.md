@@ -54,6 +54,8 @@ from . import one            # from . import 形式
 - 输出:`systemMessage` + exit 0。**只附带提醒给用户看,不继续对话、不阻断停止**;
   没有 `decision: block`,也没有 `additionalContext`。
 - `stop_hook_active` 为真时静默退出,避免和别的拦截钩子叠加刷屏。
+- **同一目录、同一批问题的指纹与上次相同就不再推送**;扫描变干净会清掉历史,
+  下次再出现同样的树才重新提醒。
 - 扫描上限:默认 500 个 `.py`;达到上限会在末尾注明「剩余文件未检查」。
 - 跳过目录:`.git`、`__pycache__`、`.venv`、`node_modules`、`vendor`、`site-packages`、
   `build`、`dist` 等生成物与第三方副本。
