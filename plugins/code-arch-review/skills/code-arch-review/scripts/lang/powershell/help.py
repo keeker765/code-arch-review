@@ -92,21 +92,13 @@ def _summary_index(lines):
         if tag:
             after_synopsis = tag == 'SYNOPSIS'  # 只有 .SYNOPSIS 的正文才算摘要
             continue
-        if (
-            # 空行不是摘要
-            line.strip()
-            # 且必须真的在 .SYNOPSIS 小节里
-            and after_synopsis
-        ):
+        # 只有 .SYNOPSIS 小节里的第一行非空正文才算摘要
+        if line.strip() and after_synopsis:
             return index
     # 第二遍:整块没有 .SYNOPSIS 时,退化成「第一行非空正文」
     for index, line in enumerate(lines):
-        if (
-            # 第一行非空正文
-            line.strip()
-            # 且不是小节头本身
-            and not _tag_of(line.strip())
-        ):
+        # 第一行非空正文,且不是小节头本身 ⇒ 退化成摘要
+        if line.strip() and not _tag_of(line.strip()):
             return index
     return -1
 
@@ -135,12 +127,8 @@ def prose_lines(doc):
         if tag:
             suppressing = tag in _SUPPRESSING_SECTIONS  # 接口清单小节的正文不计
             continue
-        if (
-            # 空行不是解释
-            not line.strip()
-            # 接口清单小节的正文也不是解释
-            or suppressing
-        ):
+        # 空行与接口清单小节的正文都不算解释
+        if not line.strip() or suppressing:
             continue
         # 摘要行是标题,不是解释段
         if index != summary:

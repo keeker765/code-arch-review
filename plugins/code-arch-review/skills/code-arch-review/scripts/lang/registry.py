@@ -19,8 +19,8 @@ _SHELL_DISABLED = frozenset({
     'no-docstring', 'thin-docstring', 'docstring-sections', 'thin-module-doc',
     'long-function', 'many-kwargs', 'deep-nesting', 'dict-as-type',
     'duplicate-toplevel', 'silent-except',
-    'uncommented-condition', 'uncommented-loop', 'uncommented-raise',
-    'uncommented-flat', 'uncommented-field', 'uncommented-assign', 'uncommented-return',
+    'uncommented-condition', 'uncommented-loop',
+    'uncommented-flat', 'uncommented-field', 'uncommented-assign',
 })
 
 # PowerShell 关掉 `dict-as-type`:这条规则判的是「同一个对象上按多个字符串键取值」,
@@ -36,8 +36,8 @@ _PS_DISABLED = frozenset({'dict-as-type'})
 _CSS_DISABLED = frozenset({
     'no-docstring', 'thin-docstring', 'docstring-sections', 'thin-module-doc',
     'many-kwargs', 'dict-as-type', 'silent-except', 'long-function',
-    'uncommented-condition', 'uncommented-loop', 'uncommented-raise',
-    'uncommented-flat', 'uncommented-field', 'uncommented-assign', 'uncommented-return',
+    'uncommented-condition', 'uncommented-loop',
+    'uncommented-flat', 'uncommented-field', 'uncommented-assign',
 })
 
 

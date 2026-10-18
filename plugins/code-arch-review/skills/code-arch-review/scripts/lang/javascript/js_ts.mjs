@@ -12,7 +12,7 @@
 import { createRequire } from 'node:module';
 
 /** `core/rules.py` 收到 flat_runs 就无条件记一条违规,所以「连续多长算平铺」只能由后端截断。 */
-export const MAX_FLAT = 5;
+export const MAX_FLAT = 10;
 
 /** 定义之间的空行数:JS 顶层与类内都是 1 行(Python 是顶层 2 行、类内 1 行)。 */
 export const LAYOUT_NEED = 1;

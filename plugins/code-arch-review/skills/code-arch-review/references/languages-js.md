@@ -35,8 +35,9 @@
 
 **偏差方向是清楚的,而且是危险的那一头**:
 
-- **漏报**(37 条):`uncommented-loop` 9、`no-docstring` 7、`deep-nesting` 6、
-  `long-function` 5、`uncommented-assign` 5、`uncommented-flat` 4、`uncommented-return` 1。
+- **漏报**(37 条,旧口径):`uncommented-loop` 9、`no-docstring` 7、`deep-nesting` 6、
+  `long-function` 5、`uncommented-assign` 5、`uncommented-flat` 4、`uncommented-return` 1
+  (`uncommented-return` 已于 2026-10-18 取消,这一项只存历史)。
   结构度量那三条不是「量不准」而是**根本没量** —— 启发式把 `body_lines`、`nesting_depth`
   `string_key_count` 一律给 0,`fields` / `flat_runs` / `layout_gaps` 留空,
   于是 `long-function`、`deep-nesting`、`packed-layout`、`uncommented-flat` 在那一档**永不触发**。

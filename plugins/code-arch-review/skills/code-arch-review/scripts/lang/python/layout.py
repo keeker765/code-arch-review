@@ -61,12 +61,8 @@ def blocks(node):
     for field_name in ('body', 'orelse', 'finalbody'):
         # 反射提取节点上可能存在的直属代码块语句列表
         group = getattr(node, field_name, None)
-        if (
-            # 该节点有这个字段
-            isinstance(group, list)
-            # 且非空 —— 空块没有语句,不必产出
-            and group
-        ):
+        # 有该字段且非空才产出 —— 空块没有语句
+        if isinstance(group, list) and group:
             yield group
     # except 体不在上面三个字段里,单独取;没有 handlers 的节点返回空列表
     for handler in getattr(node, 'handlers', []):
@@ -87,41 +83,89 @@ def _flush(runs, run):
         runs.append((run[0].lineno, len(run)))
 
 
-def _runs_in_group(group, whole_line):
+def _is_docstring(stmt):
+    """这条语句是不是函数/类的文档字符串。
+
+    文档字符串是解释本身,不是「没有注释的平铺代码」,所以不计数也不切断段。
+
+    Args:
+        stmt: 一条语句节点。
+
+    Returns:
+        是裸字符串表达式时为 True。
+    """
+    return (
+        isinstance(stmt, ast.Expr)
+        and isinstance(stmt.value, ast.Constant)
+        and isinstance(stmt.value.value, str)
+    )
+
+
+def _runs_in_group(group, whole_line, blank_rows):
     """数一个语句块里的平铺段。
 
-    线性扫描语句,遇到控制流或被独立注释覆盖的语句时结算并重置累积段。
+    线性扫描语句。控制流、空行、注释块都会切断当前段 —— 读者看到这些就是一次停顿,
+    停顿之后是新的一组操作。一组操作由紧贴的注释块引出时,这组已被说明,不计入平铺。
 
     Args:
         group: 一个语句块(if 体、循环体、函数体……)的语句列表。
         whole_line: 独立整行注释所在的行号集合。
+        blank_rows: 空行所在的行号集合。
 
     Returns:
         `[(段首行号, 段长)]`。
     """
     runs, run = [], []
-    # 逐条扫描块内语句以寻找未被独立注释分隔的长代码段
+    covered = False
+    previous = None
+
+    def flush():
+        """结算当前段:只有未被注释块引出的段才进入结果。
+
+        注释块引出的那一组已经被说明,同样长的语句不再按「没有注释」上报。
+        """
+        nonlocal run, covered
+        # 被注释块引出的组已经说明过,不再计入平铺
+        if not covered:
+            _flush(runs, run)
+        run = []
+        covered = False
+
+    # 逐条扫描块内语句以寻找未被空行或注释块分隔的长代码段
     for stmt in group:
-        # 控制流自带结构提示,不算平铺,并且切断当前段
-        if isinstance(stmt, _CONTROL_FLOW):
-            _flush(runs, run)
-            run = []
+        # 控制流与文档字符串自带结构/说明,不算平铺,并且切断当前段
+        if isinstance(stmt, _CONTROL_FLOW) or _is_docstring(stmt):
+            flush()
+            previous = stmt
             continue
-        # 语句自己这一行或上一行有独立注释 ⇒ 它已被说明,自己另起一段。
-        # 看「上一行」是因为注释写在语句上方才是本 skill 要求的写法
-        if any(row in whole_line for row in range(stmt.lineno - 1, stmt.lineno + 1)):
-            _flush(runs, run)
+        # 上一条语句与本条之间的空行、独立注释,都说明这里换了一组操作
+        gap_start = 1
+        # 有上一条语句时,从它的结束行之后开始数
+        if previous is not None:
+            # 上一条语句结束后的一行;end_lineno 缺失时退回起始行
+            gap_start = (getattr(previous, 'end_lineno', None) or previous.lineno) + 1
+        # 注释是否紧贴本条语句上方
+        comment_above = stmt.lineno - 1 in whole_line
+        comments_in_gap = any(row in whole_line for row in range(gap_start, stmt.lineno))
+        blank_in_gap = any(row in blank_rows for row in range(gap_start, stmt.lineno))
+        # 段首,或出现空白/注释分隔 ⇒ 本条开始新的一组
+        if previous is None or comment_above or comments_in_gap or blank_in_gap:
+            flush()
             run = [stmt]
-            continue
-        run.append(stmt)
-    _flush(runs, run)
+            # 注释块引出的这一组已经被说明,整组不再按平铺上报
+            covered = comment_above or comments_in_gap
+        else:
+            run.append(stmt)
+        previous = stmt
+    flush()
     return runs
 
 
-def flat_runs(tree, whole_line):
+def flat_runs(tree, whole_line, blank_rows):
     """找出函数里「连续一长串语句、中间一行注释都没有」的平铺段。
 
     控制流语句(if/for/while/with/try)自带结构提示,不计入平铺;它们同时切断当前段。
+    空行与注释块同样切断:一段操作前面的多行块注释就是这段的总述。
 
     🔴 这里记录**整段的最终长度**而不在这里比阈值:阈值属于规则引擎,
     换语言不该换阈值。上报由 `core.rules` 按 `--max-flat` 判。
@@ -129,6 +173,7 @@ def flat_runs(tree, whole_line):
     Args:
         tree: 模块的 ast 节点。
         whole_line: 独立整行注释所在的行号集合。
+        blank_rows: 空行所在的行号集合。
 
     Returns:
         `[(段首行号, 段长)]`。
@@ -143,7 +188,7 @@ def flat_runs(tree, whole_line):
         for node in ast.walk(func):
             # blocks() 产生式统一抽取出 body/orelse/finalbody 等语句列表
             for group in blocks(node):
-                runs.extend(_runs_in_group(group, whole_line))
+                runs.extend(_runs_in_group(group, whole_line, blank_rows))
     return runs
 
 

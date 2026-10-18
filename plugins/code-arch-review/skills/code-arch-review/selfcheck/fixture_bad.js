@@ -9,9 +9,9 @@
  * * `no-docstring`(`bareFunction`、类 `Rough` 与它的方法)
  * * `thin-docstring` / `docstring-sections`(`thinDoc` 只有一行摘要,且缺两个小节)
  * * `uncommented-condition`(`messy` 把两个判据挤在一行;`deepNest` 的五层 if 都没有注释)
- * * `uncommented-loop` / `uncommented-raise`(`messy` 的 `for` 与 `throw` 上方都空着)
- * * `uncommented-assign` / `uncommented-return`(`messy` 的 `total` 与它的 `return`)
- * * `uncommented-flat`(`flatRun` 里七条赋值一行注释都没有)
+ * * `uncommented-loop`(`messy` 的 `for` 上方空着;`throw` / `return` 不再单独要求注释)
+ * * `uncommented-assign`(`messy` 的 `total` 是算式赋值)
+ * * `uncommented-flat`(`flatRun` 里十二条赋值一行注释都没有)
  * * `uncommented-field`(`Rough` 的两个字段没写单位与口径)
  * * `silent-except`(`messy` 的 `catch` 是空的)
  * * `duplicate-toplevel`(`dup` 声明了两次,后一次静默胜出)
@@ -102,6 +102,10 @@ function flatRun() {
   const d = 4;
   const e = 5;
   const f = 6;
+  const h = 7;
+  const i = 8;
+  const j = 9;
+  const k = 10;
   const g = a + b + c + d + e + f;
   return g;
 }

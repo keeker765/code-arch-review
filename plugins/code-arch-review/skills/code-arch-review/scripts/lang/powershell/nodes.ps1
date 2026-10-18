@@ -234,9 +234,8 @@ function Get-ConditionOperands($Node) {
     把一个条件摊平成一个个独立判据。
 
     .DESCRIPTION
-    `if ($a -and $b)` 是**两个**判据不是一个,与 Python 侧 `operands()` 同一条口径。
-    `uncommented-condition` 要求每个子判据都能被指出来,摊平后才能知道
-    「这个 if 上有几处分叉需要说明」,也才能判出「多个条件挤一行」。
+    `if ($a -and $b)` 摊平成两个子判据,写进 `ConditionFact.operand_lines`。
+    2026-10-18 起注释规则只要求链头一条,这份摊平数据只作后端诊断,不参与判定。
 
     与 Python 侧的差异只有一处:`-not $x` / `!$x` **停下来算一个判据**,
     不往里剥 —— 取反是对同一个判据的修饰,不是新的分叉,与 Python 侧 `not` 一致。

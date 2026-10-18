@@ -108,11 +108,10 @@ function Get-ControlFacts($Ast) {
     四组都「只需要一个行号」,但判据各不相同:
 
     * **条件** —— 每个 if 的每个 clause(`elseif` 在 AST 里是同级的 clause 不是嵌套 if),
-      记下摊平后的每个子判据所在行,「多个条件挤一行」靠这个重复;
+      记下摊平后的每个子判据所在行,保留在 `operand_lines` 里作诊断;
     * **循环** —— 五种循环各有自己的类型名,标签由 `$LoopLabels` 给出;
-    * **抛异常** —— 只认 `throw`,`trap` 不在此列(它更像 catch);
-    * **算式 return** —— 剥掉包装后是裸变量或字面量的一律不算:没有口径可写,
-      与 Python 侧 `return x` / `return None` 一个口径。
+    * **抛异常** —— 只认 `throw`,`trap` 不在此列(它更像 catch);自 2026-10-18 起只作诊断;
+    * **算式 return** —— 剥掉包装后是裸变量或字面量的一律不算;自 2026-10-18 起只作诊断。
 
     .PARAMETER Ast
     整个文件的 AST。

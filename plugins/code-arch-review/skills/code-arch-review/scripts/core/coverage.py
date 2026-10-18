@@ -67,14 +67,11 @@ def tally(facts, disabled=frozenset()):
         for row in rows:
             count(row, accepts_inline=accepts_inline)
 
-    # 条件的口径是**每个子条件所在的行**,不是整个 if 节点 —— 与违规那一侧同口径
-    condition_rows = sorted({row for item in facts.conditions for row in item.operand_lines})
-    count_rule(condition_rows, 'uncommented-condition', accepts_inline=False)
-    # 循环与抛异常只认上方独立整行注释
+    # 条件按**每条 if/elif 链**计一次,与违规那一侧同口径
+    count_rule([item.line for item in facts.conditions], 'uncommented-condition', accepts_inline=False)
+    # 循环只认上方独立整行注释;后端已经滤掉简单单句 for
     count_rule([item.line for item in facts.loops], 'uncommented-loop', accepts_inline=False)
-    count_rule([item.line for item in facts.raises], 'uncommented-raise', accepts_inline=False)
-    # 字段/赋值/算式 return 接受行尾注释,与违规那一侧同口径
+    # 字段与算式赋值接受行尾注释,与违规那一侧同口径
     count_rule([item.line for item in facts.fields], 'uncommented-field', accepts_inline=True)
     count_rule([item.line for item in facts.assigns], 'uncommented-assign', accepts_inline=True)
-    count_rule([item.line for item in facts.returns], 'uncommented-return', accepts_inline=True)
     return covered, total

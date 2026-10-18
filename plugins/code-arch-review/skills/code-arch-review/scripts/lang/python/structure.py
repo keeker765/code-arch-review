@@ -16,10 +16,10 @@ from core.model import ConditionFact, FunctionFact, SimpleFact
 # py-structure: allow-sibling-imports —— Python 后端按职责拆在同目录
 from . import docstrings
 
-# 右侧算「算出来的」的表达式类型 —— 字面量赋值没什么可解释的
-_COMPUTED_ASSIGN = (ast.BinOp, ast.Call, ast.IfExp, ast.Compare)
+# 右侧算「算出来的」的表达式类型 —— 纯函数调用与字面量都不要求注释
+_COMPUTED_ASSIGN = (ast.BinOp, ast.IfExp, ast.Compare)
 
-# return 一个算式才要求注释:`return x` / `return None` 不算
+# 算式 return 的事实保留作诊断;口径归 docstring 的 Returns:,不再要求注释
 _COMPUTED_RETURN = (ast.BinOp, ast.IfExp, ast.Compare)
 
 # 算控制流嵌套层数的语句类型 —— 函数/类定义**不算**,否则嵌套函数会被重复计入
@@ -66,23 +66,26 @@ def depth(node, level=0):
     return worst
 
 
-def operands(test):
-    """把条件摊平成一个个独立判据。
+def _chain_heads(nodes):
+    """去掉 elif 节点,只留每条 `if` / `elif` 链的头。
 
-    `a and b` 是**两个**判据不是一个。嵌套里每一个都要单独说明,
-    因为每一个都是一次「判不过就走另一条路」的分叉 —— 而「判不过会怎样」
-    正是闸要求写在注释里的东西。
+    `elif` 在 AST 里就是父节点 `orelse` 里的 `If`。`else:` 里面再写 `if` 也是这个形状,
+    所以还要比列号:真 `elif` 与父 `if` 同列,嵌套的那种多一层缩进。
 
     Args:
-        test: If 节点的 test 表达式。
+        nodes: 同一个函数里的全部 `ast.If` 节点。
 
     Returns:
-        判据节点列表;非布尔组合时就是它自己一个。
+        链头节点列表,顺序不变。
     """
-    # 布尔组合递归摊平;`and` 与 `or` 一样处理,闸只关心「有几个分叉」
-    if isinstance(test, ast.BoolOp):
-        return [item for value in test.values for item in operands(value)]
-    return [test]
+    elif_ids = set()
+    # 父节点的 orelse 里同列的 If 就是 elif;记下来,后面整批排除
+    for node in nodes:
+        for child in node.orelse:
+            # 同列的 If 才是 elif;多一层缩进是 else 里的嵌套 if
+            if isinstance(child, ast.If) and child.col_offset == node.col_offset:
+                elif_ids.add(id(child))
+    return [node for node in nodes if id(node) not in elif_ids]
 
 
 def string_keys(node):
@@ -117,11 +120,11 @@ def string_keys(node):
 
 
 def conditions(tree):
-    """产出每个函数体内的 if/elif 及其摊平后的子条件。
+    """产出每个函数体内每条 `if` / `elif` 链的头节点。
 
-    模块层的 `if __name__ == ...` 不算 —— 那里没有业务判据。函数内的 if 一律算,
+    模块层的 `if __name__ == ...` 不算 —— 那里没有业务判据。函数内的条件链一律算,
     **包括顶层守卫**(用户 2026-09-08 明确:顶层 `if self.source is not None` 也要注释)。
-    elif 在 ast 里就是 orelse 里的 If,自动被覆盖。
+    一条链只产一条事实:注释写在链开头,`elif` 的前提由同一条注释覆盖。
 
     Args:
         tree: 模块的 ast 节点。
@@ -141,12 +144,11 @@ def conditions(tree):
             if isinstance(node, ast.If):
                 seen[id(node)] = node
     facts = []
-    # 按物理行号升序遍历去重后的条件节点,收集各子条件行号事实
-    for node in sorted(seen.values(), key=lambda item: item.lineno):
-        facts.append(ConditionFact(
-            line=node.lineno,
-            # 摊平成子条件**所在的行**:同一行两个子条件就记两次,判「条件挤行」靠这个重复
-            operand_lines=tuple(item.lineno for item in operands(node.test))))
+    # 排序后再去掉 elif:顺序稳定,链头自然落在它自己那一行
+    ordered = sorted(seen.values(), key=lambda item: item.lineno)
+    for node in _chain_heads(ordered):
+        # operand_lines 留给后端诊断;注释规则不再逐个 operand 计数
+        facts.append(ConditionFact(line=node.lineno, operand_lines=()))
     return facts
 
 
@@ -180,12 +182,8 @@ def _function_shape(node, doc):
     """
     bound = [*node.args.posonlyargs, *node.args.args]
     names = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
-    if (
-        # 有位置参数
-        bound
-        # 且第一个是 self/cls
-        and bound[0].arg in ('self', 'cls')
-    ):
+    # 有位置参数且第一个是 self/cls ⇒ 这是绑定实参
+    if bound and bound[0].arg in ('self', 'cls'):
         # self / cls 是绑定实参,调用方从不传,不该计入「被迫组装的依赖」
         names = [item for item in names if item is not bound[0]]
     # 有文档才谈得上「缺哪个小节」;没有文档是 no-docstring 那条规则的事
@@ -240,20 +238,93 @@ def _try_facts(node, silent):
     """
     # except 体若仅含 pass 会导致错误被静默吞掉,记录其所在物理行号
     for handler in node.handlers:
-        if (
-            # except 体只有一条语句
-            len(handler.body) == 1
-            # 且那条就是 pass —— 失败态与正常态同形
-            and isinstance(handler.body[0], ast.Pass)
-        ):
+        # except 体只有一条 pass ⇒ 失败态与正常态同形
+        if len(handler.body) == 1 and isinstance(handler.body[0], ast.Pass):
             silent.append(handler.lineno)
 
 
-def simple_facts(tree):
-    """收集循环、抛异常、字段、赋值、算式 return、空异常块。
+def _has_loop_control(node):
+    """循环体里有没有 `break` / `continue`。
 
-    这六类构造的共同点是**只需要一个行号**:规则引擎会去那一行附近找注释,
-    这里不做任何取舍。所以单遍 `ast.walk` 一次收齐 —— 分成六次遍历只是白花六倍时间。
+    不进入嵌套循环、函数与类:`break` 属于最近的那层循环,不是外层这个。
+
+    Args:
+        node: 循环节点。
+
+    Returns:
+        体内有循环控制语句时为 True。
+    """
+    pending = list(node.body)
+    # 用显式栈遍历,避免递归;嵌套边界在循环里剪掉
+    while pending:
+        child = pending.pop()
+        # 嵌套的循环/函数/类有自己的控制范围,跨过去就不是本循环的 break
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef,
+                              ast.For, ast.AsyncFor, ast.While)):
+            continue
+        # 命中 break/continue 就说明这个循环有提前退出
+        if isinstance(child, (ast.Break, ast.Continue)):
+            return True
+        pending.extend(ast.iter_child_nodes(child))
+    return False
+
+
+def _needs_loop_comment(node):
+    """这个循环要不要注释。
+
+    简单单句 `for` 不要求 —— 读一行就知道在遍历什么。只有 `while`(退出条件要解释)、
+    体 ≥ 3 条语句(一轮做几件事)、或含 `break` / `continue`(提前退出要解释)才算复杂循环。
+
+    Args:
+        node: 循环节点。
+
+    Returns:
+        需要注释时为 True。
+    """
+    return (
+        # while 的退出条件一般不是「遍历完就停」,必须说明何时停
+        isinstance(node, ast.While)
+        # 循环体一轮做三件以上的事,读者需要一句总述
+        or len(node.body) >= 3
+        # 有提前退出/跳过,控制流不再是单纯的「每条都做」
+        or _has_loop_control(node)
+    )
+
+
+def _attributes_documented(tree):
+    """类 docstring 用 `Attributes:` 交代过字段的行号。
+
+    字段的说明有两条合法落点:字段自己的上方/行尾,或类 docstring 的 `Attributes:` 小节。
+    写了小节就把这批字段从「缺注释」里豁免,避免同一件事写两遍。
+
+    Args:
+        tree: 模块的 ast 节点。
+
+    Returns:
+        已由 `Attributes:` 小节覆盖的 `AnnAssign` 行号集合。
+    """
+    rows = set()
+    # 遍历全部节点,只处理写了 Attributes: 小节的类
+    for node in ast.walk(tree):
+        # 只有类才有 Attributes 小节
+        if not isinstance(node, ast.ClassDef):
+            continue
+        # 类文档没写 Attributes: 就谈不上豁免
+        if 'Attributes:' not in (ast.get_docstring(node) or ''):
+            continue
+        # 只认类体直接声明的带注解字段,方法内部的赋值不算
+        for stmt in node.body:
+            # 字段必须是裸名字上的注解赋值
+            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+                rows.add(stmt.lineno)
+    return rows
+
+
+def simple_facts(tree):
+    """收集循环、字段、算式赋值、空异常块,以及保留作诊断的 raise / return。
+
+    前四类参与注释规则;`raises` 与 `returns` 只保留事实,失败前提与返回口径
+    归 docstring。六类都只要一个行号,所以单遍 `ast.walk` 一次收齐。
 
     Args:
         tree: 模块的 ast 节点。
@@ -262,12 +333,17 @@ def simple_facts(tree):
         `(loops, raises, fields, assigns, returns, silent_lines)` 六元组。
     """
     loops, raises, fields, assigns, returns, silent = [], [], [], [], [], []
+    # 类 docstring 已用 Attributes: 交代过的字段,不再逐字段要注释
+    documented = _attributes_documented(tree)
     # 六类构造互不依赖,所以共用这一遍遍历
     for node in ast.walk(tree):
-        # 循环是读者最需要知道「在遍历什么、为什么不能向量化」的地方
-        if isinstance(node, (ast.For, ast.AsyncFor, ast.While)):
+        # 只有复杂循环才要求说明;简单单句 for 不增加阅读负担
+        if (
+            isinstance(node, (ast.For, ast.AsyncFor, ast.While))
+            and _needs_loop_comment(node)
+        ):
             loops.append(SimpleFact(line=node.lineno, label='', accepts_inline=False))
-        # 抛异常是把失败态交给调用方的地方,注释要写「什么前提被破坏了」
+        # 抛异常事实只作诊断;失败前提归 docstring 的 Raises:
         if isinstance(node, ast.Raise):
             raises.append(SimpleFact(line=node.lineno, label='', accepts_inline=False))
         # 字段是「这个数是什么、什么单位」的唯一落点
@@ -276,6 +352,8 @@ def simple_facts(tree):
             isinstance(node, ast.AnnAssign)
             # 目标是裸名字(给属性加注解是另一回事)
             and isinstance(node.target, ast.Name)
+            # 类 docstring 的 Attributes: 小节已经交代过,不必再写一遍
+            and node.lineno not in documented
         ):
             fields.append(SimpleFact(line=node.lineno, label=node.target.id,
                                      accepts_inline=True))
@@ -291,7 +369,7 @@ def simple_facts(tree):
             if names:
                 assigns.append(SimpleFact(line=node.lineno, label=','.join(names),
                                           accepts_inline=True))
-        # return 一个算式:调用方拿到的口径必须写出来,不能靠反推表达式
+        # 算式 return 事实只作诊断;返回口径归 docstring 的 Returns:
         if (
             # return 语句
             isinstance(node, ast.Return)

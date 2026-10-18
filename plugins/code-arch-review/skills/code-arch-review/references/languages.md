@@ -23,8 +23,8 @@
 | `long-module` | ✅ 500 | ✅ 500 | ✅ 500 | ✅ 300 | ✅ 800 |
 | `flat-package` / `duplicate-basename` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `packed-layout` | ✅ 2/1 | — | ✅ 1/1 | — | — |
-| `uncommented-condition` / `-loop` / `-raise` | ✅ | ✅ | ⚠️ | ⬜ | — |
-| `uncommented-field` / `-assign` / `-return` | ✅ | ✅ | ⚠️ | ⬜ | — |
+| `uncommented-condition` / `-loop` | ✅ | ✅ | ⚠️ | ⬜ | — |
+| `uncommented-field` / `-assign` | ✅ | ✅ | ⚠️ | ⬜ | — |
 | `uncommented-flat` | ✅ | — | ⚠️ | ⬜ | — |
 | `long-function` / `deep-nesting` / `many-kwargs` | ✅ 60/4/5 | ✅ 80/4/8 | ⚠️ 50/4/5 | — | — |
 | `fat-rule-block` | — | — | — | — | ✅ 30 |

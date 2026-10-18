@@ -30,15 +30,12 @@ RULES = {
     'no-docstring':    '公开类/函数缺文档注释 —— 读代码不该依赖作者口头解释',
     'thin-module-doc': '模块文档过薄 —— 需说明为什么存在、数据是什么、口径边界',
     'silent-except':   '异常被静默吞掉 —— 失败态与正常态同形,是最难查的一类 bug',
-    'uncommented-condition': 'if/elif:一个条件一行,每行上面一行独立注释 —— '
-                             '写明它在判什么、判不过会怎样;不许多个条件挤一行,'
-                             '也不许用行尾注释',
-    'uncommented-flat': '一长串平铺语句里一行注释都没有 —— 读者只能逐行反推意图;'
-                        '每个语义段前面加一行注释说明这段在干什么',
-    'uncommented-loop': '循环上方缺独立整行注释 —— 要写明在遍历什么、每轮做什么、'
-                        '为什么必须循环(不能向量化的理由)',
-    'uncommented-raise': '抛异常上方缺独立整行注释 —— 抛异常是把失败态交给调用方,'
-                         '要写明什么前提被破坏、调用方该怎么改;行尾注释不算',
+    'uncommented-condition': 'if/elif 链开头缺独立注释 —— 一条链只要一条,'
+                             '写明整条链在判什么、判不过走哪条路;不必逐条件拆行加注释',
+    'uncommented-flat': '连续一长串平铺语句没有任何注释 —— 读者只能逐行反推意图;'
+                        '一组操作前面写一段多行块注释即可',
+    'uncommented-loop': '复杂循环上方缺独立整行注释 —— while、循环体 ≥3 条语句、'
+                        '或含 break/continue 时才要求,写明遍历什么、为什么必须循环',
     'packed-layout': '空行被删 —— 顶层定义之间要留空行、类内方法之间要留一行;'
                      '删空行是把行数压到阈值以下的作弊,也让文件失去段落',
     'long-module': '单文件过长 —— 一次改动要在无关代码里翻找,载入一个模块把整包拉进内存;'
@@ -50,11 +47,9 @@ RULES = {
     'duplicate-toplevel': '同一模块里顶层定义了两次同名的东西 —— 后定义的静默胜出,'
                           '两份实现不一致时没有任何东西会说话;文本切片式重构最容易产生它',
     'uncommented-field': '数据类/类级字段无注释 —— 字段名说不出单位、口径与取值范围;'
-                         '每个字段上方一行独立注释,或行尾注释,写明它是什么、什么单位',
-    'uncommented-assign': '算出来的变量无注释 —— 变量名只说「是什么」,注释要说「怎么来的、'
-                          '为什么这么算」;赋值右侧是运算/调用时必须有注释',
-    'uncommented-return': 'return 一个算式无注释 —— 调用方拿到的是什么口径的值,'
-                          '要在 return 上方写明,不能让人反推表达式',
+                         '字段上方/行尾写一行,或统一写进类 docstring 的 Attributes: 小节',
+    'uncommented-assign': '算式赋值无注释 —— 变量名只说「是什么」,注释要说「怎么来的、'
+                          '为什么这么算」;右侧是运算/三元/比较时要求,纯函数调用不要求',
     'thin-docstring':  '文档注释只有一行摘要 —— 摘要说「做什么」,读者要的是「为什么这么做、'
                        '什么前提下成立、边界在哪」;非平凡函数/类必须在摘要之后另起解释段',
     'docstring-sections': '文档注释缺必需小节 —— 应给出足够信息,'
@@ -100,7 +95,7 @@ class Thresholds:
     min_module_doc: int = 3         # 超过 80 行的文件模块文档最小散文行数
     max_modules: int = 7            # 单目录同层平铺模块数上限,超过应切子包
     max_module_lines: int = 500     # 单文件最大物理行数,超过应拆分子模块
-    max_flat: int = 5               # 连续无注释平铺语句条数上限,超过应切分语义段
+    max_flat: int = 10              # 连续无注释平铺语句条数上限,超过应加块注释分段
     trivial_body: int = 5           # 平凡短函数体行数上限,不超过时不强制要求文档小节
 
 
@@ -175,12 +170,8 @@ def _check_module(facts, thresholds, add):
 
     # 模块文档是唯一能说「这个文件为什么存在」的地方;文件越大越必须说
     doc_lines = len((facts.module_doc or '').splitlines())
-    if (
-        # 文件超过 80 行门槛,必须有模块文档交代背景与口径
-        facts.total_lines > _MODULE_DOC_THRESHOLD
-        # 模块文档实际散文行数未达到规定最低阈值
-        and doc_lines < thresholds.min_module_doc
-    ):
+    # 超过 80 行的文件必须有足够的模块文档交代背景与口径
+    if facts.total_lines > _MODULE_DOC_THRESHOLD and doc_lines < thresholds.min_module_doc:
         add(1, 'thin-module-doc', f'{doc_lines} 行 < {thresholds.min_module_doc}')
 
     # 重复顶层定义:引擎静默让后者胜出,所以它必须由闸来说,没有别的东西会说
@@ -189,33 +180,20 @@ def _check_module(facts, thresholds, add):
 
 
 def _check_conditions(facts, add):
-    """条件:① 一个条件一行 ② 每个条件上方一行独立注释。
+    """条件:每条 `if` / `elif` 链开头一行独立注释。
 
-    遍历各函数体内 if/elif 摊平后的所有子条件,严格判定是否存在同行挤占多个
-    判据,以及每个子条件上一行是否包含独立的整行注释。
+    只认链头那一行 —— `elif` 的前提通常已在同一条注释里覆盖。行尾注释不算,
+    因为它压在被解释的代码旁边,读者仍然要倒着找。
 
     Args:
         facts: 该文件的事实。
         add: 记一条违规的回调。
     """
-    # 条件既查同一行是否存在多个判据(挤行),也查每个判据上方是否有独立注释
     for condition in facts.conditions:
-        shared = {}
-        # 统计每个子判据所在行号的出现频次以识别同行挤压
-        for row in condition.operand_lines:
-            shared[row] = shared.get(row, 0) + 1
-        # ① 同一行上出现两个判据就是挤了
-        crowded = sorted(row for row, count in shared.items() if count > 1)
-        # 存在多个子条件挤在同一行代码的违规情况
-        if crowded:
+        # 链头上一行必须是独立整行注释;elif 不单独要求
+        if condition.line - 1 not in facts.whole_line_rows:
             add(condition.line, 'uncommented-condition',
-                f"条件挤行(行 {','.join(map(str, crowded[:4]))});一个条件一行")
-        # ② 每个判据上面一行必须是独立的整行注释(行尾注释不算)
-        bare = sorted(row for row in shared if row - 1 not in facts.whole_line_rows)
-        # 存在上方缺失独立整行注释的子条件
-        if bare:
-            add(condition.line, 'uncommented-condition',
-                f"{len(bare)} 个条件上方缺独立注释行(行 {','.join(map(str, bare[:4]))})")
+                'if/elif 链开头缺独立注释行(整链一条即可)')
 
 
 def _check_layout(facts, thresholds, add):
@@ -243,24 +221,19 @@ def _check_layout(facts, thresholds, add):
 def _check_commented(facts, add):
     """按「上方有没有注释」判的几类构造。
 
-    循环与抛异常**只认独立整行注释**;字段与算出来的赋值、算式 return 接受行尾注释
-    —— 后者一行放得下,而前者要写的东西一行放不下、一压行就被推到屏幕外。
+    循环只认独立整行注释;字段与算式赋值接受行尾注释 —— 后者一行放得下,
+    而循环要写的东西一行放不下、一压行就被推到屏幕外。raise 与 return 不单独要求:
+    失败前提与返回口径归 docstring 的 `Raises:` / `Returns:` 小节。
 
     Args:
         facts: 该文件的事实。
         add: 记一条违规的回调。
     """
-    # 循环是读者最需要知道「在遍历什么、为什么不能向量化」的地方
+    # 后端只送来复杂循环;简单单句 for 不进这个列表
     for loop in facts.loops:
         # 循环上方紧邻的上一行缺失独立整行注释
         if loop.line - 1 not in facts.whole_line_rows:
             add(loop.line, 'uncommented-loop', '上方缺独立注释行,写明遍历什么/为什么必须循环')
-
-    # 抛异常是把失败态交给调用方的地方,必须写清「什么前提被破坏了」
-    for raised in facts.raises:
-        # raise 语句上方紧邻的上一行缺失独立整行注释
-        if raised.line - 1 not in facts.whole_line_rows:
-            add(raised.line, 'uncommented-raise', '上方缺独立注释行,写明什么前提被破坏')
 
     # 字段是「这个数是什么、什么单位」的唯一落点;只有名字读者得去猜
     for field_fact in facts.fields:
@@ -269,17 +242,11 @@ def _check_commented(facts, add):
             add(field_fact.line, 'uncommented-field',
                 f'字段 {field_fact.label} 缺注释(单位/口径/范围)')
 
-    # 算出来的变量:名字说「是什么」,注释才说「怎么来的」。字面量赋值不算
+    # 算式赋值:名字说「是什么」,注释才说「怎么来的」。纯调用与字面量不算
     for assigned in facts.assigns:
-        # 经计算或调用得出的赋值既无上方独立注释也无行尾注释
+        # 运算/三元/比较得出的赋值既无上方独立注释也无行尾注释
         if not explained(facts, assigned.line, True):
-            add(assigned.line, 'uncommented-assign', f'{assigned.label} 由计算得出,上方缺注释')
-
-    # return 一个算式:调用方拿到的口径必须写出来,不能靠读表达式反推
-    for returned in facts.returns:
-        # 包含算式的 return 既无上方独立注释也无行尾注释
-        if not explained(facts, returned.line, True):
-            add(returned.line, 'uncommented-return', 'return 算式上方缺注释,写明返回值口径')
+            add(assigned.line, 'uncommented-assign', f'{assigned.label} 由算式得出,上方缺注释')
 
     # 空异常块让失败态与正常态同形 —— 最难查的一类 bug
     for line in facts.silent_except_lines:
@@ -436,7 +403,7 @@ def evaluate(facts: FileFacts, thresholds: Thresholds, disabled=frozenset()) -> 
     # 模块级与分支条件:顶层结构、import、if/elif 的写法
     _check_module(facts, thresholds, add)
     _check_conditions(facts, add)
-    # 排版与注释:空行、行宽、循环/赋值/返回的说明是否到位
+    # 排版与注释:空行、行宽、复杂循环与算式赋值的说明是否到位
     _check_layout(facts, thresholds, add)
     _check_commented(facts, add)
     # 函数接口文档,以及只对测试模块生效的那几条

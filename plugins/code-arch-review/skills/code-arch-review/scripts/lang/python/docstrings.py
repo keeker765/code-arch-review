@@ -39,36 +39,18 @@ def missing_sections(node, doc):
     # 递归子节点排查显式 raise 语句,只要会抛异常就必须在文档中声明 Raises 小节
     raises = any(isinstance(item, ast.Raise) for item in ast.walk(node))
     missing = []
-    if (
-        # 存在排除 self/cls 后的有效参数,必须在文档中说明入参含义
-        names
-        # 文档缺少 Args 格式小节头
-        and 'Args:' not in doc
-    ):
+    # 有有效参数却缺 Args: 小节
+    if names and 'Args:' not in doc:
         missing.append(f'Args({len(names)} 个参数)')
     # Yields 与 Returns 互斥:生成器写 Yields,普通函数写 Returns
-    if (
-        # 语法树包含 yield/yield from 构造,属于生成器函数
-        yields
-        # 文档缺少 Yields 格式小节头
-        and 'Yields:' not in doc
-    ):
+    # 生成器缺 Yields: 小节
+    if yields and 'Yields:' not in doc:
         missing.append('Yields')
-    elif (
-        # 函数存在非 None 的返回路径
-        returns
-        # 且非生成器形态
-        and not yields
-        # 文档缺少 Returns 格式小节头
-        and 'Returns:' not in doc
-    ):
+    # 非生成器的返回路径缺 Returns: 小节
+    elif returns and not yields and 'Returns:' not in doc:
         missing.append('Returns')
-    if (
-        # 函数体存在显式 raise 语句
-        raises
-        # 文档缺少 Raises 格式小节头
-        and 'Raises:' not in doc
-    ):
+    # 有显式 raise 却缺 Raises: 小节
+    if raises and 'Raises:' not in doc:
         missing.append('Raises')
     return missing
 

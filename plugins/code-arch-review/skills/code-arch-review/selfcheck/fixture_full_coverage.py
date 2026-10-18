@@ -2,6 +2,7 @@
 
 只放「该解释的构造」各一个,全部按规则解释到位,用来验证
 「注释类规则零违规」与「覆盖率 100%」是同一个口径。
+raise 与算式 return 故意不写注释:2026-10-18 起它们不计入分母。
 """
 from dataclasses import dataclass
 
@@ -34,9 +35,7 @@ def pick(sample, scale):
     """
     # 上界必须严格大于下界:相等表示空区间,继续算会得到 0 宽度的假仓位。
     if sample.upper <= sample.lower:
-        # 调用方应在构造 Sample 时就拒绝空区间,不要在这里裁剪成 1。
         raise ValueError("empty range")
     # 宽度按 tick 计,先取差再缩放,避免两次取整放大误差。
     width = (sample.upper - sample.lower) * scale
-    # 返回值口径:tick 数,已缩放,可能为小数。
     return width + 0

@@ -80,12 +80,8 @@ def discover(paths, skip_dirs):
             # 先按目录剪枝,否则 node_modules 会把这一趟拖成分钟级
             if any(part in skip_dirs for part in candidate.parts):
                 continue
-            if (
-                # 候选路径必须是实际文件而非目录或符号链接
-                candidate.is_file()
-                # 文件扩展名必须已被已注册的语言后端所支持
-                and registry.detect(candidate) is not None
-            ):
+            # 只收实际文件,且扩展名要有已注册的后端认领
+            if candidate.is_file() and registry.detect(candidate) is not None:
                 found.append(candidate)
     return sorted(set(found)), unknown
 

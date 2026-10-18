@@ -214,9 +214,8 @@ def _build_functions(raw):
 def _build_conditions(raw):
     """组装全部条件事实。
 
-    子条件行号由抽取脚本按 `-and` / `-or` 摊平给出,**同一行两个子条件就记两次**
-    —— 判「条件挤行」靠这个重复。PowerShell 里多行条件只能把运算符留在行尾
-    (行首写 `-and` 是语法错误),所以可行的写法是每个子条件独占一行、各带一行注释。
+    子条件行号由抽取脚本按 `-and` / `-or` 摊平给出,保留在 `operand_lines` 里作诊断。
+    2026-10-18 起注释规则只看条件起始行,不再逐个 operand 要求注释。
     """
     facts = []
     # 一个 clause 一条事实:if 与 elseif 各算一个
@@ -325,12 +324,8 @@ def parse_many(paths):
     # 按入参顺序回填,保证报告里的文件顺序稳定
     for path in paths:
         raw = dumped.get(str(path))  # 抽取脚本按入参原样回填路径
-        if (
-            # 子进程没回来这个文件的结果
-            raw is None
-            # 或者回来的是「读不了 / 语法坏」
-            or _as_list(raw.get('parse_errors'))
-        ):
+        # 子进程没回来结果,或回来的是读不了/语法坏 ⇒ 这个文件没有事实
+        if raw is None or _as_list(raw.get('parse_errors')):
             continue
         facts.append(_facts_from(path, raw))
     return facts

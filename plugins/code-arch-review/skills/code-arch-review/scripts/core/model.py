@@ -59,16 +59,15 @@ class FunctionFact:
 
 @dataclass(frozen=True)
 class ConditionFact:
-    """一个 `if` / `elif` 及其摊平后的各个子条件。
+    """一条 `if` / `elif` 链。
 
-    记录条件分支整体位置及其布尔表达式按 and/or 彻底摊平后的各个独立子条件行号,
-    用于排查同一行挤占多个条件分叉以及子条件上方缺注释。
+    Python 后端一条链只产一条事实,记链头行号;注释也只要一条,写在链开头。
+    其他语言后端按各自的语法粒度产出,规则引擎只认 `line`。
 
     Attributes:
-        line: 整个 `if` 的起始行号。
-        operand_lines: 每个摊平子条件所在的行号。`a and b` 是两个子条件,
-            即使它们写在同一行也记两次 —— 判「条件挤行」靠这个重复。
-        operands_on_one_line: 同一行上出现多个子条件的行号列表。
+        line: 链头 `if` 的起始行号。
+        operand_lines: 布尔表达式摊平后的子条件行号。保留给后端诊断,
+            **不参与注释规则与覆盖率**。
     """
 
     line: int                       # if/elif 语句起始物理行号(1 基)
@@ -85,7 +84,7 @@ class SimpleFact:
         line: 构造所在行号,1 基。
         label: 报告里显示的标识(变量名、构造描述)。
         accepts_inline: 这一条是否接受**行尾**注释。字段与赋值接受(一行放得下),
-            条件 / 循环 / raise 不接受(注释要写的东西一行放不下,且压行就丢了)。
+            循环不接受(注释要写的东西一行放不下,且压行就丢了)。
     """
 
     line: int                       # 语法构造所在物理行号(1 基)
@@ -128,12 +127,12 @@ class FileFacts:
         whole_line_rows: **独立整行**注释所在行号集合。条件/循环/raise 只认这个。
         module_doc: 模块级文档注释正文;没有则 None。
         functions: 全部函数/方法事实。
-        conditions: 全部函数内 `if` / `elif` 事实。
-        loops: 全部循环,判 `uncommented-loop`。
-        raises: 全部抛异常,判 `uncommented-raise`。
-        fields: 全部字段定义,判 `uncommented-field`。
-        assigns: 右侧是运算/调用的赋值,判 `uncommented-assign`。
-        returns: return 一个算式的语句,判 `uncommented-return`。
+        conditions: 全部函数内的 `if` / `elif` 链,判 `uncommented-condition`。
+        loops: 需要注释的复杂循环,判 `uncommented-loop`。
+        raises: 抛异常事实。保留给后端诊断,不再单独要求注释 —— 前提归 docstring 的 `Raises:`。
+        fields: 字段定义,判 `uncommented-field`;类 docstring 有 `Attributes:` 时后端会跳过。
+        assigns: 右侧是算式(运算/三元/比较)的赋值,判 `uncommented-assign`。
+        returns: 算式 return 事实。保留给后端诊断,口径归 docstring 的 `Returns:`。
         silent_except_lines: 静默吞异常的位置(`except: pass` / 空 `catch`)。
         bindings: 模块顶层直接绑定,判 `duplicate-toplevel`。
         flat_runs: 函数内「连续一长串语句无注释」的段,元素是 (段首行号, 段长度)。

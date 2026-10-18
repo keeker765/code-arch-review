@@ -272,7 +272,7 @@ def _function_facts(data):
 def _condition_facts(data):
     """全部 `if` / `else if` 事实。
 
-    行号是「子条件所在的行」,node 侧已经摊平算好,这里只做类型转换。
+    行号取 node 侧给出的条件起始行;`operand_lines` 只保留作诊断,规则不再使用。
 
     Args:
         data: node 侧解析出来的一条事实。

@@ -1,7 +1,7 @@
 """SKILL.md 的最低通过样本:照一页速查表写,闸必须判 0 违规与 100% 覆盖。
 
-它不追求功能,只要求把「条件 / 循环 / 字段 / 计算赋值 / 算式 return / 文档」
-各放一个,并且全部解释到位 —— 每类构造都在,覆盖率才可能到 100%。
+它不追求功能,只要求把「条件链 / 字段 / 算式赋值 / 文档」各放一个。
+字段走类 docstring 的 `Attributes:` 小节,验证第二种合法落点。
 """
 from dataclasses import dataclass
 
@@ -11,10 +11,14 @@ class Window:
     """一个左闭右开的计数窗口。
 
     存在的理由是让所有调用方共用同一个边界口径,不必各自减一。
+
+    Attributes:
+        start: 起点,闭端。
+        stop: 终点,开端。
     """
 
-    start: int  # 起点,闭端。
-    stop: int  # 终点,开端。
+    start: int
+    stop: int
 
 
 def total(window, values):
@@ -33,9 +37,8 @@ def total(window, values):
     # 空窗口直接返回 0:后面逐个取下标会越界。
     if window.start >= window.stop:
         return 0
-    # 从 0 起累加;顺序不影响结果,写循环是为了让越界判断只做一次。
     subtotal = 0
-    # 逐个取窗口内的元素。
+    # 顺序不影响结果;写循环是为了让越界判断只做一次。
     for index in range(window.start, window.stop):
         # 累加当前元素;整数相加,不引入浮点误差。
         subtotal = subtotal + values[index]

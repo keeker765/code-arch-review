@@ -39,19 +39,11 @@ def scan_comment_spans(line, line_marker, block_open=None, block_close=None):
         if char in '"\'':
             quote = char
             continue
-        if (
-            # 存在行注释标记
-            line_marker
-            # 当前位置匹配行注释起始标记
-            and line.startswith(line_marker, index)
-        ):
+        # 引号外命中行注释标记 ⇒ 本行注释从这里开始
+        if line_marker and line.startswith(line_marker, index):
             return index, -1
-        if (
-            # 语言配置了块注释起始标记
-            block_open
-            # 当前位置匹配块注释起始字符
-            and line.startswith(block_open, index)
-        ):
+        # 引号外命中块注释起始标记 ⇒ 返回块注释起点
+        if block_open and line.startswith(block_open, index):
             return -1, index
     return -1, -1
 
@@ -83,12 +75,8 @@ def whole_line_comment_rows(lines, line_marker, block_open=None, block_close=Non
         # 块注释续行:整行都在注释里,直接算
         if in_block:
             rows.add(row)
-            if (
-                # 配置了块注释结束标记
-                block_close
-                # 本行包含块注释闭合标记,在此关闭块注释状态
-                and block_close in line
-            ):
+            # 本行出现闭合标记时结束跨行块注释状态
+            if block_close and block_close in line:
                 in_block = False
             continue
         # 去除行首尾空白,用于判断是否为整行注释起始
@@ -144,12 +132,8 @@ def comment_rows(lines, line_marker, block_open=None, block_close=None):
         # 块注释续行:本行出现过注释文字,计入
         if in_block:
             rows.add(row)
-            if (
-                # 配置了块注释闭合标记
-                block_close
-                # 当前行包含闭合标记时退出块注释状态
-                and block_close in line
-            ):
+            # 当前行包含闭合标记时退出块注释状态
+            if block_close and block_close in line:
                 in_block = False
             continue
         line_at, block_at = scan_comment_spans(line, line_marker, block_open, block_close)

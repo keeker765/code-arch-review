@@ -242,10 +242,9 @@ function Get-HasReturn($Scope) {
     体内有没有 `return <算式>`。
 
     .DESCRIPTION
-    只判「有没有」,不判表达式形态 —— 判形态是 `Get-ControlFacts` 里
-    `uncommented-return` 那一处的事,两者判的不是同一件事:
-    这里决定**要不要写 `.OUTPUTS` 小节**,那里决定**要不要在 return 上方写注释**。
-    裸 `return` 与 `return $x` 都算「没有返回值」（无口径可写),两边口径一致。
+    只判「有没有」,决定**要不要写 `.OUTPUTS` 小节**。2026-10-18 起
+    `return` 不再单独要求注释,返回口径统一归 `.OUTPUTS` 小节。
+    裸 `return` 与 `return $x` 都算「没有返回值」（无口径可写)。
 
     .PARAMETER Scope
     函数体节点。

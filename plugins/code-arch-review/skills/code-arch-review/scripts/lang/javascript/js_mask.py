@@ -223,12 +223,8 @@ def _starts_regex(masked):
         return True
     # 关键字后面那颗斜杠一定是正则:单词以字母收尾,不单独认就会被当成除号
     word = _TRAILING_WORD_RE.search(joined)
-    if (
-        # 末尾确实是一个完整单词
-        word
-        # 而且这个词是关键字
-        and word.group(1) in _REGEX_KEYWORDS
-    ):
+    # 末尾是完整单词且该词属于关键字 ⇒ 斜杠是正则起点
+    if word and word.group(1) in _REGEX_KEYWORDS:
         return True
     return joined[-1] not in _DIVISION_AFTER            # 其余看最后一个字符
 

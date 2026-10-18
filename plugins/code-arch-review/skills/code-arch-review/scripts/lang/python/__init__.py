@@ -40,8 +40,10 @@ def parse(path: Path) -> FileFacts:
     tree = ast.parse(source)
     # tokenize 物理词法流能准确剥离引号内 # 符号,得到真实注释行集合
     all_comments = layout.comment_rows(source)
-    # 独立整行注释:行尾注释不算。条件/循环/抛异常/平铺段只认这一种
+    # 独立整行注释:行尾注释不算。条件/循环/平铺段只认这一种
     whole_line = {row for row in all_comments if lines[row - 1].lstrip().startswith('#')}
+    # 空行也切断平铺段:一组操作前面的空行就是一次阅读停顿
+    blank_rows = {row for row, line in enumerate(lines, start=1) if not line.strip()}
     loops, raises, fields, assigns, returns, silent = structure.simple_facts(tree)
     # 测试相关事实单独一次抽齐:分类、可收集用例数、改 sys.path 的行、导入的顶层模块名
     test_info = tests.test_facts(path, tree)
@@ -63,7 +65,7 @@ def parse(path: Path) -> FileFacts:
         returns=returns,
         silent_except_lines=silent,
         bindings=bindings.bindings(tree),
-        flat_runs=layout.flat_runs(tree, whole_line),
+        flat_runs=layout.flat_runs(tree, whole_line, blank_rows),
         layout_gaps=layout.packed_layout(tree, lines),
         heuristic=False,
         test_kind=test_info['test_kind'],

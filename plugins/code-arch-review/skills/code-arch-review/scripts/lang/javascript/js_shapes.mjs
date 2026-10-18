@@ -17,8 +17,8 @@ import { isFunctionNode, startLineOf, nameText, subtreeHas } from './js_nodes.mj
 /**
  * 把 `&&` / `||` 摊平成一个个独立判据。
  *
- * `a && b` 是两个判据,即使写在同一行也记两次 —— 「条件挤行」就是靠这个重复判的。
- * 括号要脱掉,否则 Python 侧 `if ((a and b))` 摊成两个而这里只算一个。
+ * `a && b` 是两个判据,即使写在同一行也记两次 —— 这份摊平数据只作诊断,
+ * 2026-10-18 起注释规则只看条件起始行。括号要脱掉,否则摊平结果会多算一层。
  *
  * @param {object} node 条件表达式。
  * @param {object[]} out 结果累积数组。

@@ -27,8 +27,8 @@ python "${CLAUDE_SKILL_DIR}/scripts/check.py" <路径...>
 | 规则 | 阈值 | 防的是 | 分册 |
 |---|---|---|---|
 | `long-module` / `packed-layout` / `long-function` / `many-kwargs` / `deep-nesting` / `fat-rule-block` | 500 行 / 空行 / 60 行 / 5 个 / 4 层 / 30 条声明 | 上帝函数;删空行压行;一个选择器管太多事 | [layout](references/layout.md) · [languages](references/languages.md) |
-| `dict-as-type` / `uncommented-field` / `uncommented-assign` / `uncommented-return` / `uncommented-flat` | 4 键 / 每处 / 连续 5 条 | 字段含义与计算口径藏在名字里;注释紧贴该行,`if`/`try` 上方不算 | [comments](references/comments.md) |
-| `uncommented-condition` / `uncommented-loop` / `uncommented-raise` / `silent-except` | 每处 | 条件一行一注释;循环写遍历什么;raise 注释紧贴 raise;失败态不许静默 | [comments](references/comments.md) |
+| `dict-as-type` / `uncommented-field` / `uncommented-assign` / `uncommented-flat` | 4 键 / 每处 / 算式赋值 / 连续 10 条 | 字段含义与计算口径藏在名字里;字段写行尾或类 docstring 的 `Attributes:`;一组操作前一段块注释即可 | [comments](references/comments.md) |
+| `uncommented-condition` / `uncommented-loop` / `silent-except` | 每条链 / 复杂循环 / 每处 | 每条 if/elif 链一条注释,写在链开头;while、体 ≥3 条或含 break/continue 的循环要说明;失败态不许静默 | [comments](references/comments.md) |
 | `no-docstring` / `thin-docstring` / `docstring-sections` / `thin-module-doc` | 见分册 | 不看实现就能写出调用;摘要后必须有解释段(类也一样) | [docstrings](references/docstrings.md) |
 | `flat-package` / `duplicate-basename` / `duplicate-toplevel` | 7 个 / 跨目录重名 / 顶层重定义 | 扫不完等于没有导航;后定义静默胜出 | [layout](references/layout.md) |
 | `sibling-import` / `import-order` / `multi-import` | 包内禁互导 / future→stdlib→其余,组内字典序 / 每行一个 | 依赖成网;导入顺序可读 | [imports](references/imports.md) |
@@ -41,17 +41,17 @@ def settle(order, balance):
     """结算订单,返回扣款后的余额。
 
     手续费在成交时锁定;余额不足时整笔拒绝,不做部分扣款。
-
     Args:
         order: 待结算的订单。
         balance: 结算前余额,单位分。
 
     Returns:
         扣款后的余额,单位分。
+    Raises:
+        ValueError: 状态不是 open。
     """
-    # 状态不是 open ⇒ 不可结算
+    # 状态不是 open ⇒ 不可结算;失败前提归 docstring 的 Raises:
     if order.status != "open":
-        # 前提被破坏:没有可结算的量
         raise ValueError(order.order_id)
     # 扣款后的余额;失败时保持原值
     balance = balance - order.total

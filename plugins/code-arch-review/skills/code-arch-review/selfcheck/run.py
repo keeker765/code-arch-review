@@ -238,6 +238,33 @@ def check_fix_mode():
     return '--fix 自动排序 1/1'
 
 
+def check_comment_policy():
+    """新注释口径的阳性与阴性必须同时成立。
+
+    这条断言钉的是 2026-10-18 的规则:条件链只查链头、简单 for 不要注释、
+    while 必查、纯调用赋值不查、Attributes 字段豁免、raise 与 return 不查。
+    只验阳性会把「规则被放大」放过,只验阴性会把「规则被删掉」放过。
+
+    Returns:
+        该类样本的一行结论。
+    """
+    # 夹具同时含该报与不该报的形态,按规则名计数
+    out = run(HERE / 'fixture_comment_policy.py')
+    expected = {
+        'uncommented-condition': 1,  # 只有 failures 的 if 没注释;branches 的 elif 不再单独报
+        'uncommented-loop': 1,       # 只有 while;单句 for 被后端滤掉
+        'uncommented-field': 1,      # 只有 Bare.gamma;Documented 走 Attributes
+        'uncommented-assign': 2,     # simple_loop 与 assignments 各一条算式
+    }
+    for rule, count in expected.items():
+        assert out.count(f'[{rule}]') == count, \
+            f'{rule} 应报 {count} 处,实际输出:\n{out}'
+    # 两条已被取消的规则不得再出现
+    assert '[uncommented-raise]' not in out, f'raise 不应再要求注释:\n{out}'
+    assert '[uncommented-return]' not in out, f'return 不应再要求注释:\n{out}'
+    return '注释策略阳性/阴性 6/6'
+
+
 def main():
     """依次跑全部自检,任一条不成立就让它抛出(不吞异常)。
 
@@ -246,8 +273,8 @@ def main():
     包含 SELFCHECK_OK 的状态串。
     """
     # 汇总核心覆盖率断言、阳性对照、多语言样本与文档结构的校验结果
-    results = [check_python_fixture(), check_duplicate_fixture(), check_test_fixture(),
-               check_import_structure(), check_fix_mode(), doccheck.check()]
+    results = [check_python_fixture(), check_comment_policy(), check_duplicate_fixture(),
+               check_test_fixture(), check_import_structure(), check_fix_mode(), doccheck.check()]
     clean_ok, clean_skip = check_clean_fixtures()
     bad_ok, bad_skip = check_bad_fixtures()
     results.append(f'合规样本 0 违规:{", ".join(clean_ok) or "无"}')

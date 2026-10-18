@@ -382,8 +382,8 @@ def _command_words(text: str) -> list:
 def _condition_fact(line: _LogicalLine, offset: int, word: str) -> ConditionFact:
     """把一条 `if` / `elif` 摊成各个子条件所在的行号。
 
-    同一行上出现两个子条件就是「挤行」,所以同一行要记两次 —— 规则引擎正是靠这个重复判
-    挤行(core/rules.py 的 `crowded`)。条件体到第一个命令位置上的 `then` 为止。
+    同一行上出现两个子条件就记两次,保留在 `operand_lines` 里作诊断。
+    2026-10-18 起注释规则只看条件起始行。条件体到第一个命令位置上的 `then` 为止。
     """
     head = offset + len(word)   # 条件体从关键字之后开始
     stop = len(line.text)       # 没有 `then` 时条件体取到行尾
@@ -409,7 +409,7 @@ def _condition_fact(line: _LogicalLine, offset: int, word: str) -> ConditionFact
         # 被 `&&` 拆出来的空片段(如 `cmd &&` 后直接换行)不是一个判据
         if not piece.strip():
             continue
-        # 记在判据**自己那一行**上:续行摊开后,同一物理行出现两个判据才算挤行
+        # 记在判据自己那一行上;同一物理行出现两个判据时会有重复行号
         rows.append(_row_at(line, head + begin + len(piece) - len(piece.lstrip())))
     return ConditionFact(line=_row_at(line, offset), operand_lines=tuple(rows))
 
