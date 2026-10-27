@@ -31,7 +31,8 @@ RULES = {
     'thin-module-doc': '模块文档过薄 —— 需说明为什么存在、数据是什么、口径边界',
     'silent-except':   '异常被静默吞掉 —— 失败态与正常态同形,是最难查的一类 bug',
     'uncommented-condition': 'if/elif 链开头缺独立注释 —— 一条链只要一条,'
-                             '写明整条链在判什么、判不过走哪条路;不必逐条件拆行加注释',
+                             '写明整条链在判什么、判不过走哪条路;不必逐条件拆行加注释;'
+                             '单条件卫语句不要求',
     'uncommented-flat': '连续一长串平铺语句没有任何注释 —— 读者只能逐行反推意图;'
                         '一组操作前面写一段多行块注释即可',
     'uncommented-loop': '复杂循环上方缺独立整行注释 —— while、循环体 ≥3 条语句、'
@@ -46,10 +47,11 @@ RULES = {
                           '都分不清是哪一个',
     'duplicate-toplevel': '同一模块里顶层定义了两次同名的东西 —— 后定义的静默胜出,'
                           '两份实现不一致时没有任何东西会说话;文本切片式重构最容易产生它',
-    'uncommented-field': '数据类/类级字段无注释 —— 字段名说不出单位、口径与取值范围;'
+    'uncommented-field': '数值字段无注释 —— 字段名说不出单位、口径与取值范围;'
                          '字段上方/行尾写一行,或统一写进类 docstring 的 Attributes: 小节',
     'uncommented-assign': '算式赋值无注释 —— 变量名只说「是什么」,注释要说「怎么来的、'
-                          '为什么这么算」;右侧是运算/三元/比较时要求,纯函数调用不要求',
+                          '为什么这么算」;三元/比较、多运算符、魔数、取整取极值时要求,'
+                          '纯函数调用与单运算符算式不要求',
     'thin-docstring':  '文档注释只有一行摘要 —— 摘要说「做什么」,读者要的是「为什么这么做、'
                        '什么前提下成立、边界在哪」;非平凡函数/类必须在摘要之后另起解释段',
     'docstring-sections': '文档注释缺必需小节 —— 应给出足够信息,'
@@ -294,6 +296,8 @@ def _check_docs(fn, thresholds, add):
         and fn.body_lines > thresholds.trivial_body
         # 摘要行之外缺少解释段散文行
         and fn.doc_prose_lines == 0
+        # 只装字段的记录类,一行摘要已说清它是什么
+        and not fn.plain_record
     ):
         add(fn.line, 'thin-docstring', f'{_label(fn)} 摘要行之后没有解释段')
 

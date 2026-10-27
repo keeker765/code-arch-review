@@ -137,7 +137,7 @@ def apply_overrides(languages, args):
         # 覆写项与 Thresholds 字段一一对应,None 表示调用方未在命令行指定
         for name in ('max_body', 'max_kwargs', 'max_keys', 'max_depth',
                      'min_module_doc', 'max_modules', 'max_flat', 'max_module_lines',
-                     'max_declarations'):
+                     'max_declarations', 'trivial_body'):
             # 没传时不出现在 changes 里,保持该语言原本设定的默认阈值
             value = getattr(args, name)
             # 没传就保持该语言自己的值,不要拿默认值把它盖掉
@@ -272,6 +272,8 @@ def main():
     parser.add_argument('--max-flat', type=int, default=None)
     parser.add_argument('--max-module-lines', type=int, default=None)
     parser.add_argument('--max-declarations', type=int, default=None)
+    # 体长不超过它的函数,一行 docstring 即合格(不要求解释段与小节)
+    parser.add_argument('--trivial-body', type=int, default=None)
     # 格式化输出选项:开启时以 JSON 结构输出原始违规列表
     parser.add_argument('--json', action='store_true')
     # 先用 ruff 自动排导入,再扫描;缺 ruff 时明确报错

@@ -39,6 +39,8 @@ class FunctionFact:
         doc_prose_lines: 文档摘要行之后、小节之外的解释文字行数,判 `thin-docstring` 用。
         declaration_count: 块内**直接**写了多少条声明。CSS 的规则块靠它判「太胖」,
             其他语言留 0 —— 于是那条规则在别的语言上永远不会触发。
+        plain_record: 只装字段、没有构造逻辑的记录类(Python 的 dataclass)。
+            一行摘要即合格,不判 `thin-docstring`;其他语言留 False。
     """
 
     name: str                       # 符号标识,匿名函数为空串
@@ -55,6 +57,7 @@ class FunctionFact:
     nesting_depth: int = 0          # 控制流语法树最大嵌套层级,用于深嵌套判定
     doc_prose_lines: int = 0        # 摘要之后不属于任何小节的散文解释行数
     declaration_count: int = 0      # 样式规则块直接声明数(仅 CSS 适用)
+    plain_record: bool = False      # 无构造逻辑的记录类,免解释段
 
 
 @dataclass(frozen=True)

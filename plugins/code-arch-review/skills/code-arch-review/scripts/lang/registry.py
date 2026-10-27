@@ -110,7 +110,7 @@ class Language:
 # 各语言的阈值。表里没有的项取 Thresholds 的默认值 —— 默认值就是 Python 那一套。
 LANGUAGES = (
     # Python:基准。单文件 500 / 函数体 60 / 参数 5 / 嵌套 4
-    Language('python', ('.py',), 'lang.python', Thresholds(),
+    Language('python', ('.py',), 'lang.python', Thresholds(trivial_body=10),
              frozenset(), reserved=('__init__.py', '__main__.py')),
     # PowerShell:惯例是动词-名词长函数名 + 显式 param() 块,参数多、函数长是常态;
     # 按 Python 的 60/5 会大面积误报,而只报噪声的闸会被关掉。

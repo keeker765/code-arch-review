@@ -19,6 +19,12 @@ from . import docstrings
 # 右侧算「算出来的」的表达式类型 —— 纯函数调用与字面量都不要求注释
 _COMPUTED_ASSIGN = (ast.BinOp, ast.IfExp, ast.Compare)
 
+# 出现在算式里就说明有口径要交代的调用:取极值、取整
+_ROUNDING_CALLS = frozenset({'min', 'max', 'round', 'int', 'floor', 'ceil', 'trunc'})
+
+# 字段注解里出现这些类型才要求注释:单位、口径、取值范围只对数值有意义
+_NUMERIC_TYPES = frozenset({'int', 'float', 'Decimal', 'Fraction'})
+
 # 算式 return 的事实保留作诊断;口径归 docstring 的 Returns:,不再要求注释
 _COMPUTED_RETURN = (ast.BinOp, ast.IfExp, ast.Compare)
 
@@ -35,11 +41,18 @@ def body_lines(node):
         node: 函数或类的 ast 节点。
 
     Returns:
-        从体首行到体末行的行数(含首尾)。
+        从体首行到体末行的行数(含首尾),docstring 不算;体只有 docstring 时为 0。
     """
+    body = node.body
+    # docstring 计入体长会让「写了文档」本身把短函数推过 trivial_body 门槛
+    if ast.get_docstring(node) is not None:
+        body = body[1:]
+    # 体只有 docstring ⇒ 没有实现行
+    if not body:
+        return 0
     # 闭区间:末语句的结束行减首语句的起始行加一。
     # `end_lineno` 在旧版本 Python 上可能缺失,那时退回定义行本身
-    return (node.body[-1].end_lineno or node.lineno) - node.body[0].lineno + 1
+    return (body[-1].end_lineno or node.lineno) - body[0].lineno + 1
 
 
 def depth(node, level=0):
@@ -88,6 +101,26 @@ def _chain_heads(nodes):
     return [node for node in nodes if id(node) not in elif_ids]
 
 
+def _is_guard(node):
+    """单条件、无分支、体只有一句跳出的 `if`,即卫语句。
+
+    `if not xs: raise ...` 这种条件与动作都写在一行里,再配一条注释只是复述代码。
+    带 `and` / `or` 的复合条件仍要求注释:那里藏着「为什么这几个条件要一起判」。
+
+    Args:
+        node: 一条 `if` 链的链头。
+
+    Returns:
+        是卫语句时为 True。
+    """
+    return (
+        not node.orelse
+        and not isinstance(node.test, ast.BoolOp)
+        and len(node.body) == 1
+        and isinstance(node.body[0], (ast.Return, ast.Raise, ast.Continue, ast.Break))
+    )
+
+
 def string_keys(node):
     """同一个对象上最多按几个字符串键取值。
 
@@ -122,8 +155,9 @@ def string_keys(node):
 def conditions(tree):
     """产出每个函数体内每条 `if` / `elif` 链的头节点。
 
-    模块层的 `if __name__ == ...` 不算 —— 那里没有业务判据。函数内的条件链一律算,
-    **包括顶层守卫**(用户 2026-09-08 明确:顶层 `if self.source is not None` 也要注释)。
+    模块层的 `if __name__ == ...` 不算 —— 那里没有业务判据。函数内的条件链都算,
+    **包括顶层守卫**(用户 2026-09-08 明确:顶层 `if self.source is not None` 也要注释);
+    唯一例外是体只有一句 return/raise/continue/break 的单条件卫语句(用户 2026-10-27 定)。
     一条链只产一条事实:注释写在链开头,`elif` 的前提由同一条注释覆盖。
 
     Args:
@@ -146,7 +180,11 @@ def conditions(tree):
     facts = []
     # 排序后再去掉 elif:顺序稳定,链头自然落在它自己那一行
     ordered = sorted(seen.values(), key=lambda item: item.lineno)
+    # 每条链头产一条事实,卫语句跳过
     for node in _chain_heads(ordered):
+        # 卫语句的条件与动作同在一行,注释只能复述代码
+        if _is_guard(node):
+            continue
         # operand_lines 留给后端诊断;注释规则不再逐个 operand 计数
         facts.append(ConditionFact(line=node.lineno, operand_lines=()))
     return facts
@@ -223,7 +261,8 @@ def function_facts(tree):
             body_lines=body_lines(node), params=params,
             is_public=not node.name.startswith('_'), is_class=is_class, doc=doc,
             missing_sections=missing, string_key_count=keys, nesting_depth=nesting,
-            doc_prose_lines=docstrings.prose_lines(doc) if doc else 0))
+            doc_prose_lines=docstrings.prose_lines(doc) if doc else 0,
+            plain_record=is_class and _is_plain_record(node)))
     return facts
 
 
@@ -291,6 +330,70 @@ def _needs_loop_comment(node):
     )
 
 
+def _needs_assign_comment(value):
+    """算式赋值的右侧是否藏着值得交代的口径。
+
+    `total = total + x`、`mean = total / n` 这种单个运算符的算式读一眼就懂,不要求注释。
+    要求注释的是:三元与比较、两个以上运算符、数字常数(魔数)、整除取模,
+    以及算式里的取极值 / 取整调用 —— 这些都是「为什么这么算」读代码看不出来的地方。
+
+    Args:
+        value: 赋值语句的右侧表达式。
+
+    Returns:
+        需要注释时为 True。
+    """
+    # 三元与比较:分支口径不在名字里
+    if not isinstance(value, ast.BinOp):
+        return isinstance(value, _COMPUTED_ASSIGN)
+    nodes = list(ast.walk(value))
+    operators = sum(isinstance(item, ast.BinOp) for item in nodes)
+    magic = any(isinstance(item, ast.Constant) and isinstance(item.value, (int, float))
+                and not isinstance(item.value, bool) for item in nodes)
+    rounding = any(isinstance(item, ast.BinOp) and isinstance(item.op, (ast.FloorDiv, ast.Mod))
+                   for item in nodes)
+    calls = {getattr(item.func, 'id', getattr(item.func, 'attr', None))
+             for item in nodes if isinstance(item, ast.Call)}
+    return operators >= 2 or magic or rounding or bool(calls & _ROUNDING_CALLS)
+
+
+def _numeric_annotation(annotation):
+    """字段注解里有没有数值类型。
+
+    单位、口径、取值范围只对数值字段有意义;`name: str`、`items: list[Order]` 的含义
+    名字已经说了,逼它写注释只会产出复述。
+
+    Args:
+        annotation: `AnnAssign` 的注解表达式。
+
+    Returns:
+        注解里出现 int / float / Decimal / Fraction 时为 True(含 `int | None` 这类组合)。
+    """
+    return any(getattr(item, 'id', getattr(item, 'attr', None)) in _NUMERIC_TYPES
+               for item in ast.walk(annotation))
+
+
+def _is_plain_record(node):
+    """没有自定义构造逻辑的 dataclass。
+
+    这种类就是一组字段,类 docstring 的一行摘要已经说清它是什么;要求解释段只会产出
+    「定义用于……的核心数值」这类凑数的话。写了 `__init__` / `__post_init__` 就有构造口径,
+    仍按普通类要求。
+
+    Args:
+        node: 类的 ast 节点。
+
+    Returns:
+        是无构造逻辑的 dataclass 时为 True。
+    """
+    decorators = {getattr(target, 'id', getattr(target, 'attr', None))
+                  for target in (item.func if isinstance(item, ast.Call) else item
+                                 for item in node.decorator_list)}
+    methods = {stmt.name for stmt in node.body
+               if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    return 'dataclass' in decorators and not methods & {'__init__', '__post_init__'}
+
+
 def _attributes_documented(tree):
     """类 docstring 用 `Attributes:` 交代过字段的行号。
 
@@ -354,6 +457,8 @@ def simple_facts(tree):
             and isinstance(node.target, ast.Name)
             # 类 docstring 的 Attributes: 小节已经交代过,不必再写一遍
             and node.lineno not in documented
+            # 只有数值字段才有单位与口径可交代
+            and _numeric_annotation(node.annotation)
         ):
             fields.append(SimpleFact(line=node.lineno, label=node.target.id,
                                      accepts_inline=True))
@@ -361,8 +466,8 @@ def simple_facts(tree):
         if (
             # 普通赋值节点且具有明确赋值目标
             isinstance(node, ast.Assign)
-            # 右侧是运算/调用/三元/比较 —— 字面量赋值不要求注释
-            and isinstance(node.value, _COMPUTED_ASSIGN)
+            # 右侧是带口径的算式 —— 字面量、纯调用、单运算符算式不要求注释
+            and _needs_assign_comment(node.value)
         ):
             names = [item.id for item in node.targets if isinstance(item, ast.Name)]
             # 目标是属性或下标时没有「变量名」可报,这类赋值跳过

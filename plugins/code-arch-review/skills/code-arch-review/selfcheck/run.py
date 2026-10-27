@@ -242,7 +242,8 @@ def check_comment_policy():
     """新注释口径的阳性与阴性必须同时成立。
 
     这条断言钉的是 2026-10-18 的规则:条件链只查链头、简单 for 不要注释、
-    while 必查、纯调用赋值不查、Attributes 字段豁免、raise 与 return 不查。
+    while 必查、纯调用赋值不查、Attributes 字段豁免、raise 与 return 不查;
+    以及 2026-10-27 的放宽:卫语句、单运算符赋值、非数值字段、记录类与短函数的一行文档不查。
     只验阳性会把「规则被放大」放过,只验阴性会把「规则被删掉」放过。
 
     Returns:
@@ -251,10 +252,12 @@ def check_comment_policy():
     # 夹具同时含该报与不该报的形态,按规则名计数
     out = run(HERE / 'fixture_comment_policy.py')
     expected = {
-        'uncommented-condition': 1,  # 只有 failures 的 if 没注释;branches 的 elif 不再单独报
+        'uncommented-condition': 1,  # 只有 compound_guard;failures 是卫语句,elif 不单独报
         'uncommented-loop': 1,       # 只有 while;单句 for 被后端滤掉
-        'uncommented-field': 1,      # 只有 Bare.gamma;Documented 走 Attributes
-        'uncommented-assign': 2,     # simple_loop 与 assignments 各一条算式
+        'uncommented-field': 1,      # 只有 Bare.gamma;Documented 走 Attributes,label 不是数值
+        'uncommented-assign': 1,     # 只有 assignments 的魔数算式;total + value 是单运算符
+        'thin-docstring': 0,         # Record 是记录类,short 体长不过门槛
+        'docstring-sections': 0,     # short 体长不过门槛,不要求 Args/Returns
     }
     for rule, count in expected.items():
         assert out.count(f'[{rule}]') == count, \
@@ -262,7 +265,7 @@ def check_comment_policy():
     # 两条已被取消的规则不得再出现
     assert '[uncommented-raise]' not in out, f'raise 不应再要求注释:\n{out}'
     assert '[uncommented-return]' not in out, f'return 不应再要求注释:\n{out}'
-    return '注释策略阳性/阴性 6/6'
+    return '注释策略阳性/阴性 8/8'
 
 
 def main():

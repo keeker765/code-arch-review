@@ -16,6 +16,8 @@
 - Python 后端把 `elif` 归进同一条链,只检查链头。
 - 注释写在链头 `if` 的上一行,一条覆盖整条链。
 - 不要求把 `and` / `or` 拆行,也不要求逐个 operand 注释。
+- **卫语句放行**(2026-10-27):单条件、无 `elif` / `else`、体只有一句
+  `return` / `raise` / `continue` / `break` 的 `if` 不要求注释。带 `and` / `or` 的仍要求。
 - **行尾注释不算**。说明压在代码旁边,读者仍要倒着找。
 
 ```python
@@ -43,13 +45,16 @@ for row in rows:
     carry = carry + row.fee_raw
 ```
 
-## 赋值:只要求算式(2026-10-18)
+## 赋值:只要求有口径的算式(2026-10-18,2026-10-27 放宽)
 
-右侧是**运算 / 三元 / 比较**时要求注释。字面量与纯函数调用不要求:
+右侧是**三元 / 比较**,或运算里含**两个以上运算符、数字常数、`//` `%`、
+`min` / `max` / `round` / `int` / `floor` / `ceil` 调用**时要求注释。
+字面量、纯函数调用、`total + x` 这种单运算符算式不要求:
 
 ```python
 limit = 8                       # 字面量:不要求
 fee = compute_fee(order)        # 纯调用:不要求
+total = total + fee             # 单运算符:不要求
 # 手续费按两条腿的较小值收,避免单边深度不足时高估成本
 fee = min(fee_a, fee_b) * config.fee_rate
 ```
@@ -100,7 +105,8 @@ save_snapshot(cache_path, merged)
 
 ## 字段:两种落点(2026-10-18)
 
-二选一,不许两处都不写:
+只要求**数值字段**(注解里有 `int` / `float` / `Decimal` / `Fraction`,含 `int | None`);
+`name: str` 这类名字已说清的字段不要求(2026-10-27)。数值字段二选一,不许两处都不写:
 
 1. 字段上方一行独立注释,或本行行尾注释。
 2. 类 docstring 的 `Attributes:` 小节统一说明。

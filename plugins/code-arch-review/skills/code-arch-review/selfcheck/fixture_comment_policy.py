@@ -1,7 +1,8 @@
 """注释策略的阳性/阴性对照(2026-10-18)。
 
 这份夹具故意同时含有该报与不该报的形态。`selfcheck/run.py` 按规则计数:
-条件链只报链头、简单 for 不报、while 必报、纯调用赋值不报、Attributes 字段不报。
+条件链只报链头、单条件卫语句不报、简单 for 不报、while 必报、纯调用与单运算符赋值不报、
+Attributes 字段与非数值字段不报、无构造逻辑的 dataclass 与短函数的一行 docstring 不报。
 """
 from dataclasses import dataclass
 
@@ -27,6 +28,25 @@ class Bare:
     """
 
     gamma: int
+    label: str
+
+
+@dataclass(frozen=True)
+class Record:
+    """只装字段的记录,一行摘要即可。"""
+
+    name: str
+
+
+def short(values):
+    """短函数的一行 docstring 合格。"""
+    first = values[0]
+    second = values[1]
+    third = values[2]
+    middle = values[len(values) // 2]
+    last = values[-1]
+    size = len(values)
+    return first, second, third, middle, last, size
 
 
 def branches(value):
@@ -117,3 +137,18 @@ def failures(value):
     if value < 0:
         raise ValueError(value)
     return value + 1
+
+
+def compound_guard(value):
+    """复合条件的卫语句仍要求注释。
+
+    `or` 连起来的两个条件为什么要一起判,读代码看不出来。
+
+    Args:
+        value: 输入数。
+
+    Raises:
+        ValueError: 输入越界。
+    """
+    if value < 0 or value > 9:
+        raise ValueError(value)
