@@ -6,7 +6,7 @@
 """
 
 # py-structure: allow-sibling-imports —— 同目录判据模块是这个 skill 的结构
-from .rules import STRUCT_RULES
+from .rules import COMMENT_RULES, STRUCT_RULES
 
 # 说明密度低于这个数,基本可以判定「只有一行式文档,没有解释为什么」。
 # 参照:2026-09-08 在来源仓库实测,被当作范本的包 32.3%,被当作反例的包 6.0%。
@@ -56,18 +56,18 @@ def blocking(findings):
             if not (item.heuristic and item.rule in STRUCT_RULES)]
 
 
-def render(findings, file_count, skipped, covered, total_constructs):
+def render(findings, file_count, skipped):
     """印出违规明细与汇总。
 
-    格式化按规则、路径、行号排序的违规明细列表,追加扫描概况、跳过后端说明、
-    注释覆盖率指标以及按频次降序排列的违规规则分类清单。
+    格式化按规则、路径、行号排序的违规明细列表,追加扫描概况、跳过后端说明
+    以及按频次降序排列的违规规则分类清单。覆盖率单独由 `coverage_line` 印 ——
+    两条线拆开是因为它们分别回答「改哪里」与「写得够不够」,合并进一个函数
+    会让它超过参数个数的闸限。
 
     Args:
         findings: 全部违规。
         file_count: 实际扫描的文件数。
         skipped: `[(语言名, 原因)]`,说明哪些语言这次没跑成。
-        covered: 已解释的构造数。
-        total_constructs: 该解释的构造总数。
 
     Returns:
         要打印的整段文本。
@@ -86,12 +86,6 @@ def render(findings, file_count, skipped, covered, total_constructs):
     for language, reason in skipped:
         lines.append(f'⚠ 跳过 {language}:{reason}')
 
-    # 无任何待解释构造时按 100.0% 满分通过,分子与分母同为 0 时不报除零
-    percent = 100.0 if not total_constructs else covered / total_constructs * 100
-    lines.append(f'注释覆盖率 {percent:.1f}%  '
-                 f'({covered}/{total_constructs} 个该解释的构造已注释)'
-                 f'   ← 完整性看这个,密度可以靠堆废话拉高')
-
     counts = {}
     # 统计各违规规则命中次数:归纳频次用于按严重程度/普遍度排序展示
     for item in findings:
@@ -100,6 +94,32 @@ def render(findings, file_count, skipped, covered, total_constructs):
     for rule, number in sorted(counts.items(), key=lambda pair: -pair[1]):
         lines.append(f'  {number:3d}  {rule:22s} {item_why(rule, findings)}')
     return '\n'.join(lines)
+
+
+def coverage_line(covered, total_constructs, comments_exempt=False):
+    """印注释覆盖率,或「不适用」。
+
+    覆盖率的分母由代码结构决定,压不动 —— 报告必须把「完整性看哪个」写出来,
+    否则读者会去优化能被压缩的说明密度。豁免模式下注释类构造已整体从分母扣除,
+    0/0 印成 100.0% 会冒充「写得好」,所以那条路径只声明不适用。
+
+    Args:
+        covered: 已解释的构造数。
+        total_constructs: 该解释的构造总数。
+        comments_exempt: 注释豁免模式是否开启。
+
+    Returns:
+        要打印的一行文本。
+    """
+    # 豁免模式下分母已整体扣除,百分比无意义:只报模式本身与没查的规则
+    if comments_exempt:
+        return ('注释豁免模式:未查 ' + '/'.join(sorted(COMMENT_RULES))
+                + ',注释覆盖率不适用')
+    # 无任何待解释构造时按 100.0% 满分通过,分子与分母同为 0 时不报除零
+    percent = 100.0 if not total_constructs else covered / total_constructs * 100
+    return (f'注释覆盖率 {percent:.1f}%  '
+            f'({covered}/{total_constructs} 个该解释的构造已注释)'
+            f'   ← 完整性看这个,密度可以靠堆废话拉高')
 
 
 def item_why(rule, findings):

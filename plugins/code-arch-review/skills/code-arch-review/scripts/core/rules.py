@@ -77,6 +77,15 @@ RULES = {
 # 这三条量的是结构形状,启发式后端上会误报 ⇒ 只报不拦(见 references/languages.md)。
 STRUCT_RULES = ('long-function', 'deep-nesting', 'many-kwargs')
 
+# 注释豁免模式(`check.py --no-comments`)关掉的就是这九条:注释与文档类的全部规则。
+# 关掉时覆盖率的分母必须一起扣掉(走 `coverage.tally` 的 disabled 参数),否则分母为空、
+# 分子也为空,报告会把 0/0 印成「100%」——那个数不是「写得好」,是「没量」。
+COMMENT_RULES = frozenset({
+    'no-docstring', 'thin-docstring', 'docstring-sections', 'thin-module-doc',
+    'uncommented-condition', 'uncommented-loop', 'uncommented-flat',
+    'uncommented-field', 'uncommented-assign',
+})
+
 # 超过这个行数的文件才要求模块文档 —— 短文件没什么可交代的
 _MODULE_DOC_THRESHOLD = 80
 

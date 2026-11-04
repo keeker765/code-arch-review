@@ -24,7 +24,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 CHECK = HERE.parent / 'scripts' / 'check.py'
 
 
-def run(target):
+def run(target, extra=()):
     """跑一次闸,拿它的输出。
 
     刻意不看退出码:坏样本本来就该退出 1,把它当异常会让阳性对照本身变成错误。
@@ -37,12 +37,13 @@ def run(target):
 
     Args:
         target: 要扫的文件或目录。
+        extra: 额外传给闸的开关,原样插在路径之前(如 `('--no-comments',)`)。
 
     Returns:
         闸的标准输出与标准错误的合并文本。
     """
     # 用 stdout=PIPE + stderr=STDOUT 而不是 capture_output:后者与 stderr 重定向互斥
-    return subprocess.run([sys.executable, str(CHECK), str(target)],
+    return subprocess.run([sys.executable, str(CHECK), *extra, str(target)],
                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                           text=True).stdout
 
@@ -268,6 +269,30 @@ def check_comment_policy():
     return '注释策略阳性/阴性 8/8'
 
 
+def check_comments_exempt():
+    """`--no-comments` 必须只关注释与文档规则,结构规则照报。
+
+    阳性一半:注释策略夹具一开豁免就必须 0 违规,报告改印「注释覆盖率不适用」;
+    阴性一半:重复定义夹具在豁免模式下仍报出 2 处 —— 只验阳性的话,
+    一个把整个闸静默跳过的实现也能通过,而那种后门比没有开关更糟。
+
+    Returns:
+        该类样本的一行结论。
+    """
+    # 默认模式下注释违规必须还在:豁免是显式开关,不能变成默认静默
+    strict = run(HERE / 'fixture_comment_policy.py')
+    assert '[uncommented-condition]' in strict, f'默认模式该报注释违规:\n{strict}'
+    # 开豁免后注释类违规一条都不剩,且报告显式声明覆盖率不适用
+    exempt = run(HERE / 'fixture_comment_policy.py', ('--no-comments',))
+    assert '0 处违规' in exempt, f'豁免模式仍报违规:\n{exempt}'
+    assert '注释覆盖率不适用' in exempt, f'豁免模式该声明覆盖率不适用:\n{exempt}'
+    # 结构规则不受豁免影响:重复定义必须照报,否则开关就是全局后门
+    shape = run(HERE / 'fixture_duplicate_toplevel.py', ('--no-comments',))
+    assert shape.count('[duplicate-toplevel]') == 2, \
+        f'豁免模式漏报结构规则:\n{shape}'
+    return '注释豁免模式阳性/阴性 2/2'
+
+
 def main():
     """依次跑全部自检,任一条不成立就让它抛出(不吞异常)。
 
@@ -276,8 +301,9 @@ def main():
     包含 SELFCHECK_OK 的状态串。
     """
     # 汇总核心覆盖率断言、阳性对照、多语言样本与文档结构的校验结果
-    results = [check_python_fixture(), check_comment_policy(), check_duplicate_fixture(),
-               check_test_fixture(), check_import_structure(), check_fix_mode(), doccheck.check()]
+    results = [check_python_fixture(), check_comment_policy(), check_comments_exempt(),
+               check_duplicate_fixture(), check_test_fixture(), check_import_structure(),
+               check_fix_mode(), doccheck.check()]
     clean_ok, clean_skip = check_clean_fixtures()
     bad_ok, bad_skip = check_bad_fixtures()
     results.append(f'合规样本 0 违规:{", ".join(clean_ok) or "无"}')

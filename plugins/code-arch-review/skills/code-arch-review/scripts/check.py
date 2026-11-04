@@ -5,6 +5,7 @@ dict 当接口、深嵌套、没有文档的公开类。这些 linter 一条都�
 
 用法:
     python <skill目录>/scripts/check.py <路径...> [--max-body 60] [--json] [--fix]
+                                         [--no-comments]
 
 退出码 1 = 有违规(启发式档的结构度量三条只报不拦,不计入退出码),可直接当 CI / 交付闸。
 一个目标都没匹配到时**报错退出**,不让空集冒充通过。
@@ -24,7 +25,7 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 from core import package, report          # noqa: E402
-from core.rules import evaluate           # noqa: E402
+from core.rules import COMMENT_RULES, evaluate  # noqa: E402
 from lang import registry                 # noqa: E402
 
 # 源码树扫描时要跳过的目录。这些不是「作者写的代码」,扫它们只会淹没真信号。
@@ -169,6 +170,9 @@ def run(paths, args):
     ready, failed = registry.available()
     # 结合命令行显式传入的阈值参数,生成各可用语言最终生效的阈值映射字典
     overrides = apply_overrides(ready, args)
+    # 注释豁免模式:九条注释/文档规则叠加到每门语言自己的禁用名单上,
+    # 覆盖率分母也靠同一份名单扣除(见 core.coverage 的 disabled 参数)
+    comments_off = COMMENT_RULES if args.no_comments else frozenset()
     ready_names = {language.name for language in ready}
     # 分组:每种语言一次交给后端,好让需要 spawn 进程的后端只起一次
     grouped = {language.name: [] for language in ready}
@@ -192,7 +196,8 @@ def run(paths, args):
             continue
         # 一门语言一趟:解析、规则求值、跨文件的包级判据都在 scan_language 里
         found, facts, lang_covered, lang_total = scan_language(
-            language, targets, overrides[language.name], failed)
+            language, targets, overrides[language.name], failed,
+            language.disabled_rules | comments_off)
         findings.extend(found)
         all_facts.extend(facts)
         covered += lang_covered
@@ -200,7 +205,7 @@ def run(paths, args):
     return findings, len(all_facts), failed, covered, total, report.density(all_facts), unknown
 
 
-def scan_language(language, targets, thresholds, failed):
+def scan_language(language, targets, thresholds, failed, disabled):
     """把一门语言的这一批文件扫完,产出违规、事实与覆盖率的分子分母。
 
     单开一层是为了让 `run` 只呈现阶段:一门外语言的完整流程(解析 → 逐文件求值 →
@@ -211,6 +216,7 @@ def scan_language(language, targets, thresholds, failed):
         targets: 这门语言的待扫文件。
         thresholds: 这门语言生效的阈值(可能已被命令行覆写)。
         failed: 跳过原因列表,原地追加。
+        disabled: 本次生效的禁用规则,已由调用方叠加语言自己的名单与注释豁免模式。
 
     Returns:
         `(违规列表, 事实列表, 已解释构造数, 构造总数)`;后端起不来时四项都为空。
@@ -234,21 +240,21 @@ def scan_language(language, targets, thresholds, failed):
     # 事实与阈值比对是语言无关的通用规则逻辑,同一套规则解释多门语言
     for facts in facts_list:
         # 运行核心规则集合评估该文件的违规情况与注释覆盖度
-        outcome = evaluate(facts, thresholds, language.disabled_rules)
+        outcome = evaluate(facts, thresholds, disabled)
         findings.extend(item for item in outcome.findings
-                        if item.rule not in language.disabled_rules)
+                        if item.rule not in disabled)
         covered += outcome.covered
         total += outcome.total
     # 包级形状(平铺目录、同名模块)要拿整批路径一起看,单个文件判不出来
     findings.extend(item for item in package.package_shape(targets, thresholds.max_modules,
                                                            language.reserved)
-                    if item.rule not in language.disabled_rules)
+                    if item.rule not in disabled)
     # 测试模块互相 import 是跨文件判据:要拿本次扫到的全部测试模块名当白名单
     findings.extend(item for item in package.test_imports(facts_list)
-                    if item.rule not in language.disabled_rules)
+                    if item.rule not in disabled)
     # 同目录互导、导入顺序与一行多个 import:要拿整批事实一起看
     findings.extend(item for item in package.import_structure(facts_list, language.reserved)
-                    if item.rule not in language.disabled_rules)
+                    if item.rule not in disabled)
     return findings, facts_list, covered, total
 
 
@@ -276,6 +282,9 @@ def main():
     parser.add_argument('--trivial-body', type=int, default=None)
     # 格式化输出选项:开启时以 JSON 结构输出原始违规列表
     parser.add_argument('--json', action='store_true')
+    # 注释豁免模式:结构照判,注释与文档类规则整体不查;交付验收仍用默认模式
+    parser.add_argument('--no-comments', action='store_true',
+                        help='注释豁免模式:不查注释与文档类规则,注释覆盖率不计')
     # 先用 ruff 自动排导入,再扫描;缺 ruff 时明确报错
     parser.add_argument('--fix', action='store_true')
     # 额外要跳过的目录名。可重复,判据与 _SKIP_DIRS 相同(整个目录名匹配)
@@ -297,7 +306,8 @@ def main():
     if args.json:
         print(json.dumps([item.__dict__ for item in findings], ensure_ascii=False, indent=2))
     else:
-        print(report.render(findings, file_count, skipped, covered, total))
+        print(report.render(findings, file_count, skipped))
+        print(report.coverage_line(covered, total, args.no_comments))
         print(f'说明密度 {density:.1f}%   (参照:20% 以下基本可判定「只有一行式文档,'
               f'没有解释为什么」)')
         # 显式点名但无法识别的文件逐条提示,避免读者误以为这些路径已通过审查
