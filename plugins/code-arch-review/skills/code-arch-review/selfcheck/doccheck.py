@@ -159,8 +159,9 @@ def _check_examples(skill):
     fences = skill.count('```python')
     assert fences >= _MIN_EXAMPLES, \
         f'SKILL.md 的 Python 例子只有 {fences} 段,应至少 {_MIN_EXAMPLES} 段'
-    # 用闸跑一遍最小样本,验「照着入口写」真的能过
-    done = subprocess.run([sys.executable, str(_CHECK), str(_EXAMPLES)],
+    # 用闸跑一遍最小样本,验「照着入口写」真的能过。注释规则 2026-11-11 起
+    # 默认不查,这一条量的是「入口的例子注释也写得对」,所以必须显式 --comments
+    done = subprocess.run([sys.executable, str(_CHECK), '--comments', str(_EXAMPLES)],
                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     # 最小样本必须是零违规且满覆盖
     assert '0 处违规' in done.stdout, f'照着 SKILL.md 写的最小文件没通过闸:\n{done.stdout}'

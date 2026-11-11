@@ -22,6 +22,9 @@ import doccheck
 HERE = pathlib.Path(__file__).resolve().parent
 # check.py 入口脚本绝对路径,用于 subprocess 驱动自身执行
 CHECK = HERE.parent / 'scripts' / 'check.py'
+# 「全开档」:把默认关掉的两组规则都打开。2026-11-11 起注释与 long-module 默认不查,
+# 自检必须两档都跑 —— 只跑默认档的话,这两组判据写歪了没有任何地方会红。
+FULL_FLAGS = ('--comments', '--long-module')
 
 
 def run(target, extra=()):
@@ -37,7 +40,7 @@ def run(target, extra=()):
 
     Args:
         target: 要扫的文件或目录。
-        extra: 额外传给闸的开关,原样插在路径之前(如 `('--no-comments',)`)。
+        extra: 额外传给闸的开关,原样插在路径之前(如 `('--comments',)`)。
 
     Returns:
         闸的标准输出与标准错误的合并文本。
@@ -56,8 +59,9 @@ def check_python_fixture():
     Returns:
         该类样本的一行结论。
     """
-    # 扫描满覆盖样本,输出文本用于核对 0 违规与 100% 覆盖两个指标
-    out = run(HERE / 'fixture_full_coverage.py')
+    # 扫描满覆盖样本,输出文本用于核对 0 违规与 100% 覆盖两个指标。
+    # 注释规则 2026-11-11 起默认不查,这里必须显式 --comments 才量得到覆盖率
+    out = run(HERE / 'fixture_full_coverage.py', ('--comments',))
     assert '0 处违规' in out, f'夹具不该有违规:\n{out}'
     assert '注释覆盖率 100.0%' in out, f'零违规却不是满覆盖,两套谓词又分叉了:\n{out}'
     return 'Python 满覆盖夹具 0 违规 / 100% 覆盖'
@@ -113,9 +117,10 @@ def fixture_unavailable(out):
 
 
 def check_clean_fixtures():
-    """每种语言的合规样本都必须报 0 违规。
+    """每种语言的合规样本都必须报 0 违规 —— 默认档与全开档各跑一遍。
 
-    阴性对照:合规样本报出违规,说明某条判据过宽。
+    阴性对照:合规样本报出违规,说明某条判据过宽。两档都跑是因为默认档现在
+    只看结构;只跑默认档的话,注释类判据写宽了没有任何地方会红。
 
     Returns:
         `(通过的语言后缀列表, 跳过的语言后缀列表)`。
@@ -130,9 +135,40 @@ def check_clean_fixtures():
         if fixture_unavailable(out):
             skipped.append(fixture.suffix)
             continue
-        assert '0 处违规' in out, f'{fixture.name} 该是合规样本,却报了违规:\n{out}'
+        assert '0 处违规' in out, f'{fixture.name} 默认档该是合规样本,却报了违规:\n{out}'
+        # 全开档再验一次:注释与行长两类规则关着时不代表它们判得对
+        full = run(fixture, FULL_FLAGS)
+        assert '0 处违规' in full, f'{fixture.name} 全开档该是合规样本,却报了违规:\n{full}'
         passed.append(fixture.suffix)
     return passed, skipped
+
+
+def check_optional_defaults():
+    """两组可选规则**默认必须不查**,显式开关才查。
+
+    这条钉的是 2026-11-11 的口径变更本身。只验「全开档能报出来」的话,
+    开关接反了(默认查、加参数反而不查)自检照样全绿,而那种接反正是最难发现的一类。
+
+    Returns:
+        该类样本的一行结论。
+    """
+    # 阳性一半:注释违规夹具在默认档必须 0 违规 —— 注释规则真的默认关着
+    default = run(HERE / 'fixture_comment_policy.py')
+    assert '0 处违规' in default, f'注释规则默认该关,却报了违规:\n{default}'
+    # 反向一半:显式 --comments 必须把注释违规放回来
+    explicit = run(HERE / 'fixture_comment_policy.py', ('--comments',))
+    assert '[uncommented-condition]' in explicit, f'--comments 没打开注释规则:\n{explicit}'
+    # 行长同样:超过 300 行的 shell 反例默认不报,加了开关才报
+    default = run(HERE / 'fixture_bad.sh')
+    assert '[long-module]' not in default, f'long-module 默认该关,却报了:\n{default}'
+    # shell 注释/结构规则全在 `_SHELL_DISABLED` 里,所以这两档唯一可能的差别
+    # 就是 long-module —— 它没出现说明开关根本没接上
+    opened = run(HERE / 'fixture_bad.sh', ('--long-module',))
+    assert '[long-module]' in opened, f'--long-module 没打开行长规则:\n{opened}'
+    # 历史别名 --no-comments 不能变成未知参数错误,且行为等于默认档
+    alias = run(HERE / 'fixture_comment_policy.py', ('--no-comments',))
+    assert '0 处违规' in alias, f'--no-comments 别名行为不对:\n{alias}'
+    return '可选规则默认关/开关生效/历史别名 3/3'
 
 
 def check_bad_fixtures():
@@ -155,7 +191,18 @@ def check_bad_fixtures():
         if fixture_unavailable(out):
             skipped.append(fixture.suffix)
             continue
-        assert '0 处违规' not in out, f'{fixture.name} 该是坏样本,闸却报 0 违规:\n{out}'
+        # shell 这份坏样本**只**靠 long-module 证伪(注释与结构规则本来就在
+        # `_SHELL_DISABLED` 里),而 long-module 2026-11-11 起默认关 ⇒ 默认档
+        # 0 违规是口径变更的必然结果,不是漏检。反过来钉住它,免得后端哪天连
+        # long-module 都不产出时,这里仍报「通过」。
+        if fixture.suffix == '.sh':
+            assert '0 处违规' in out, f'{fixture.name} 默认档不该有违规(壳只查行长):\n{out}'
+        else:
+            assert '0 处违规' not in out, \
+                f'{fixture.name} 默认档该是坏样本,闸却报 0 违规:\n{out}'
+        # 全开档同样要报得出来:坏样本里那些注释/行长的坑,只有开全档才会被扫
+        full = run(fixture, FULL_FLAGS)
+        assert '0 处违规' not in full, f'{fixture.name} 全开档报 0 违规:\n{full}'
         passed.append(fixture.suffix)
     return passed, skipped
 
@@ -250,8 +297,9 @@ def check_comment_policy():
     Returns:
         该类样本的一行结论。
     """
-    # 夹具同时含该报与不该报的形态,按规则名计数
-    out = run(HERE / 'fixture_comment_policy.py')
+    # 夹具同时含该报与不该报的形态,按规则名计数。
+    # 注释规则 2026-11-11 起默认不查,这里必须显式 --comments 才数得到
+    out = run(HERE / 'fixture_comment_policy.py', ('--comments',))
     expected = {
         'uncommented-condition': 1,  # 只有 compound_guard;failures 是卫语句,elif 不单独报
         'uncommented-loop': 1,       # 只有 while;单句 for 被后端滤掉
@@ -270,27 +318,28 @@ def check_comment_policy():
 
 
 def check_comments_exempt():
-    """`--no-comments` 必须只关注释与文档规则,结构规则照报。
+    """关掉注释规则时只关注释与文档规则,结构规则照报。
 
-    阳性一半:注释策略夹具一开豁免就必须 0 违规,报告改印「注释覆盖率不适用」;
-    阴性一半:重复定义夹具在豁免模式下仍报出 2 处 —— 只验阳性的话,
+    阳性一半:注释策略夹具在默认档就必须 0 违规,报告印「注释覆盖率不适用」;
+    阴性一半:重复定义夹具在默认档仍报出 2 处 —— 只验阳性的话,
     一个把整个闸静默跳过的实现也能通过,而那种后门比没有开关更糟。
+
+    2026-11-11 起豁免是**默认**而不是 `--no-comments` 开关,所以这里验默认档;
+    别名 --no-comments 的行为等价性在 `check_optional_defaults` 里单独钉。
 
     Returns:
         该类样本的一行结论。
     """
-    # 默认模式下注释违规必须还在:豁免是显式开关,不能变成默认静默
-    strict = run(HERE / 'fixture_comment_policy.py')
-    assert '[uncommented-condition]' in strict, f'默认模式该报注释违规:\n{strict}'
-    # 开豁免后注释类违规一条都不剩,且报告显式声明覆盖率不适用
-    exempt = run(HERE / 'fixture_comment_policy.py', ('--no-comments',))
-    assert '0 处违规' in exempt, f'豁免模式仍报违规:\n{exempt}'
-    assert '注释覆盖率不适用' in exempt, f'豁免模式该声明覆盖率不适用:\n{exempt}'
-    # 结构规则不受豁免影响:重复定义必须照报,否则开关就是全局后门
-    shape = run(HERE / 'fixture_duplicate_toplevel.py', ('--no-comments',))
+    # 默认档注释违规必须已经不报:注释规则默认关着
+    default = run(HERE / 'fixture_comment_policy.py')
+    assert '[uncommented-condition]' not in default, f'默认档不该报注释违规:\n{default}'
+    # 且报告显式声明覆盖率不适用,不能印出 0/0 → 100% 的假数
+    assert '注释覆盖率不适用' in default, f'默认档该声明覆盖率不适用:\n{default}'
+    # 结构规则不受豁免影响:重复定义必须照报,否则关注释就变成全局后门
+    shape = run(HERE / 'fixture_duplicate_toplevel.py')
     assert shape.count('[duplicate-toplevel]') == 2, \
-        f'豁免模式漏报结构规则:\n{shape}'
-    return '注释豁免模式阳性/阴性 2/2'
+        f'关注释时漏报结构规则:\n{shape}'
+    return '注释默认关 + 结构照报 3/3'
 
 
 def main():
@@ -302,8 +351,8 @@ def main():
     """
     # 汇总核心覆盖率断言、阳性对照、多语言样本与文档结构的校验结果
     results = [check_python_fixture(), check_comment_policy(), check_comments_exempt(),
-               check_duplicate_fixture(), check_test_fixture(), check_import_structure(),
-               check_fix_mode(), doccheck.check()]
+               check_optional_defaults(), check_duplicate_fixture(), check_test_fixture(),
+               check_import_structure(), check_fix_mode(), doccheck.check()]
     clean_ok, clean_skip = check_clean_fixtures()
     bad_ok, bad_skip = check_bad_fixtures()
     results.append(f'合规样本 0 违规:{", ".join(clean_ok) or "无"}')

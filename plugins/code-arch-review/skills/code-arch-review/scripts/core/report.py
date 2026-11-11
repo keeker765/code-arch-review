@@ -103,18 +103,23 @@ def coverage_line(covered, total_constructs, comments_exempt=False):
     否则读者会去优化能被压缩的说明密度。豁免模式下注释类构造已整体从分母扣除,
     0/0 印成 100.0% 会冒充「写得好」,所以那条路径只声明不适用。
 
+    2026-11-11 起注释规则**默认就不查**,所以默认这一行走的都是豁免分支 ——
+    这不是废路径:显式 `--comments` 时百分比照旧有,而豁免分支必须继续存在,
+    否则「默认模式」下读者会看到 `0/0 → 100.0%` 这个假数。
+
     Args:
         covered: 已解释的构造数。
         total_constructs: 该解释的构造总数。
-        comments_exempt: 注释豁免模式是否开启。
+        comments_exempt: 注释规则是否未查(默认真)。
 
     Returns:
         要打印的一行文本。
     """
     # 豁免模式下分母已整体扣除,百分比无意义:只报模式本身与没查的规则
     if comments_exempt:
-        return ('注释豁免模式:未查 ' + '/'.join(sorted(COMMENT_RULES))
-                + ',注释覆盖率不适用')
+        return ('注释规则未查(默认;要查加 --comments):'
+                + '/'.join(sorted(COMMENT_RULES))
+                + ' · 注释覆盖率不适用')
     # 无任何待解释构造时按 100.0% 满分通过,分子与分母同为 0 时不报除零
     percent = 100.0 if not total_constructs else covered / total_constructs * 100
     return (f'注释覆盖率 {percent:.1f}%  '

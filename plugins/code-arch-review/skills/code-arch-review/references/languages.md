@@ -18,6 +18,9 @@
 
 `✅` 查、`⚠️` 查但可能误报(报告标注)、`⬜` 已实现但默认不拦、`—` 明确不查。
 
+🔴 **2026-11-11 起 `long-module` 与注释/文档九条默认关**,要 `--long-module` / `--comments` 才查。
+下表 `✅` 说的是「开启后按这套阈值判」,不是「默认就会报」。
+
 | 规则 | Python | PowerShell | JS / TS | Bash | CSS |
 |---|---|---|---|---|---|
 | `long-module` | ✅ 500 | ✅ 500 | ✅ 500 | ✅ 300 | ✅ 800 |
@@ -42,8 +45,7 @@
 
 Bash 的 `⬜` 四条**已实现**,默认关掉只因检查密度太高;要开就在
 `scripts/lang/registry.py` 删掉 `_SHELL_DISABLED` 里的名字。
-PowerShell 的 `dict-as-type` 也关了:`$obj.A` 分不清哈希表与强类型属性。
-**只报噪声的闸和没有一样**,这是取舍不是遗漏。
+PowerShell 的 `dict-as-type` 也关了:`$obj.A` 分不清哈希表与强类型属性。**只报噪声的闸和没有一样**,这是取舍不是遗漏。
 
 `packed-layout` / `uncommented-flat` 依赖后端产出的 `layout_gaps` / `flat_runs`;
 PowerShell / Bash / CSS 后端留空这两项,所以格子是 `—` 而不是漏做。
@@ -161,8 +163,7 @@ CSS 的「函数」是**规则块**,选择器是名字;`duplicate-toplevel` 对�
 
 ## Bash(最低档)
 
-只查 `long-module`(300)、`flat-package`、`duplicate-basename`。
-注释四条**已实现但默认不拦** —— 要开在 `scripts/lang/registry.py` 删 `_SHELL_DISABLED` 里的名字。
+只查 `long-module`(300)、`flat-package`、`duplicate-basename`;而 `long-module` 自 2026-11-11 起默认关,**默认档下只剩两条包级判据**,要它报行长加 `--long-module`。注释四条**已实现但默认不拦**,要开在 `scripts/lang/registry.py` 删 `_SHELL_DISABLED` 里的名字。
 
 不查文档约定、`long-function`、`deep-nesting`、`many-kwargs`、`duplicate-toplevel`、`silent-except`。
 `long-function` 是**做不到**而非不查:heredoc、续行、子 shell、`{ }` 分组都会骗过扫描器,

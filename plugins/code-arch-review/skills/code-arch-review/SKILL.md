@@ -9,24 +9,24 @@ description: 【强制,非可选】代码结构验收闸,用户 2026-09-08 定,2
 
 ## 顺序
 
-能跑的代码 → 主任务闭环 → 统一补注释与 docstring → 跑一次闸。当场写、不许延后:踩过的坑;涉钱/涉安全/信任边界的关键检查;故意切掉的角;同一个文件一次改完。
+能跑的代码 → 主任务闭环 → 跑一次闸。当场写、不许延后:踩过的坑;涉钱/涉安全/信任边界的关键检查;故意切掉的角;同一个文件一次改完。
+注释与 docstring 已不再要求补(2026-11-03 起),见下。
 
 ## 怎么跑
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/check.py" <路径...> [--no-comments]
+python "${CLAUDE_SKILL_DIR}/scripts/check.py" <路径...>
 ```
 
-退出码 1 = 有违规。只跑一次。纯 stdlib;PowerShell 要 `pwsh`,JS/TS 要 `node`;`--fix` 用 ruff 自动排导入顺序。
-显式点名单个文件时,父目录有 `__init__.py` 就自动带上同层文件一起判。
-目录里一个可识别的目标都没有时**报错退出**,空集不算通过。
-跳过目录、`--exclude`、`--no-comments`(注释豁免模式:注释与文档规则不查、覆盖率不计,交付验收仍用默认模式)与各语言档位见 [languages.md](references/languages.md)。
+**默认只查结构。** 2026-11-11 起两类噪声默认关:注释与文档那九条(速查表第二、三、四行)要 `--comments` 才查,单文件 500 行上限要 `--long-module` 才查。补注释纯耗额度、几十处一起报会把真结构问题淹掉;分层模块与数据表天然过千行。旧 `--no-comments` 保留为别名(传了等于没传)。
+
+退出码 1 = 有违规。只跑一次。纯 stdlib;PowerShell 要 `pwsh`,JS/TS 要 `node`;`--fix` 用 ruff 自动排导入顺序。显式点名单个文件时,父目录有 `__init__.py` 就自动带上同层文件一起判。目录里一个可识别的目标都没有时**报错退出**,空集不算通过。跳过目录、`--exclude` 与各语言档位见 [languages.md](references/languages.md)。
 
 ## 速查表
 
 | 规则 | 阈值 | 防的是 | 分册 |
 |---|---|---|---|
-| `long-module` / `packed-layout` / `long-function` / `many-kwargs` / `deep-nesting` / `fat-rule-block` | 500 行 / 空行 / 60 行 / 5 个 / 4 层 / 30 条声明 | 上帝函数;删空行压行;一个选择器管太多事 | [layout](references/layout.md) · [languages](references/languages.md) |
+| `long-module` / `packed-layout` / `long-function` / `many-kwargs` / `deep-nesting` / `fat-rule-block` | 500 行 / 空行 / 60 行 / 5 个 / 4 层 / 30 条声明 | 上帝函数;删空行压行;一个选择器管太多事;行数那条默认关 | [layout](references/layout.md) · [languages](references/languages.md) |
 | `dict-as-type` / `uncommented-field` / `uncommented-assign` / `uncommented-flat` | 4 键 / 每处 / 算式赋值 / 连续 10 条 | 字段含义与计算口径藏在名字里;字段写行尾或类 docstring 的 `Attributes:`;一组操作前一段块注释即可 | [comments](references/comments.md) |
 | `uncommented-condition` / `uncommented-loop` / `silent-except` | 每条链 / 复杂循环 / 每处 | 每条 if/elif 链一条注释,写在链开头,单条件卫语句除外;while、体 ≥3 条或含 break/continue 的循环要说明;失败态不许静默 | [comments](references/comments.md) |
 | `no-docstring` / `thin-docstring` / `docstring-sections` / `thin-module-doc` | 见分册 | 不看实现就能写出调用;摘要后必须有解释段(类也一样) | [docstrings](references/docstrings.md) |
@@ -74,7 +74,7 @@ from pkg._internal.helper import helper    # ✅ 下沉到子包,写完整包名
 
 ## 验收与派活
 
-违规数 = 0,注释覆盖率 100%(标了 `(启发式)` 的除外)。改过闸就跑一次自检:
+违规数 = 0(标了 `(启发式)` 的除外)。加了 `--comments` 时另要求注释覆盖率 100%;默认档不量覆盖率。改过闸就跑一次自检:
 
 ```bash
 python "${CLAUDE_SKILL_DIR}/selfcheck/run.py"
