@@ -59,11 +59,10 @@
 - **拆分是平移 + `__init__` re-export**,调用方 import 不变。
   **不许"顺手重构逻辑"** —— 搬家和改装混在一起,出问题时分不清是谁干的。
 - 一次一个组,每组跟一次全量测试。
-- 测试目录镜像源码目录 —— **这是团队约定,不是通行规则,闸不查它**。
-  2026-10-15 核对:单元/集成分目录、测试目录镜像源码、`tests/` 要不要 `__init__.py`
-  这三条**都没有权威出处**,而官方文档在最后一条上自相矛盾;实测 flask / httpx /
-  requests / attrs / click / werkzeug / black 全用平铺的 `tests/`,只有 celery、
-  ansible、sentry 这类才分层。**别拿它当验收标准**——照它拦会把大批合法项目判成违规。
+- 测试目录镜像源码目录 —— 用户 2026-11-13 定**闸查它**(`test-mirror`):`tests/<路径>` 要在 `src/<路径>`
+  或仓库根 `<路径>` 下有同名目录;`tests/` 直下的文件不管,开头的 `unit/`/`integration/`/`e2e/` 先剥掉,
+  `fixtures`/`_support`/`support`/`helpers`/`golden`/`contracts`/`data_files` 这些辅助目录豁免。
+  平铺的 `tests/`(flask、httpx 那种)天然不违规,所以它不会误伤只放一层测试的项目。
 - **分组不能靠猜名字**:落地前先跑包内 import 图确认没有反向边。
   **有反向边说明分组错了,改分组,不要改 import。**
 

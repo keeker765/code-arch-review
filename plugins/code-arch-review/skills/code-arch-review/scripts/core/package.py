@@ -107,6 +107,67 @@ def dir_fanout(paths, max_dirs, skip_dirs):
     return found
 
 
+#: 测试目录里不要求镜像的辅助目录:夹具、金标准、契约、共用工具
+_MIRROR_EXEMPT = frozenset({'fixtures', '_support', 'support', 'helpers', 'golden', 'contracts', 'data_files'})
+#: 测试目录开头可以先按测试层级分一层,镜像从这一层之后算
+_MIRROR_TIERS = frozenset({'unit', 'integration', 'e2e'})
+
+
+def test_mirror(paths, skip_dirs):
+    """查测试目录镜像源码:``tests/<路径>`` 要在 ``src/<路径>`` 或仓库根 ``<路径>`` 下有同名目录。
+
+    测试放在哪由它测的代码决定,读者按源码路径就能找到对应测试,反过来也一样;
+    镜像断了,测试要靠搜才找得到,源码搬家时它也会被落下。
+    ``tests/`` 直下的文件不管(平铺的小项目照样合法);夹具、金标准这类辅助目录不测具体代码,豁免;
+    开头的 ``unit/``、``integration/``、``e2e/`` 层级先剥掉再比。
+    一个目录只报一条,不按文件重复报。
+
+    Args:
+        paths: 命令行给的原始路径(文件或目录);目录会递归,文件只看它自己。
+        skip_dirs: 递归时不进的目录名。
+
+    Returns:
+        违规列表,字段与单文件规则一致。
+    """
+    files = []
+    # 把命令行给的文件与目录摊平成文件清单:目录要递归,文件只取它自己
+    for raw in paths:
+        path = Path(raw)
+        # 目录:递归收集其中全部文件
+        if path.is_dir():
+            for here, dirs, names in os.walk(path):
+                dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith('.')]
+                files.extend(Path(here) / name for name in names)
+        elif path.is_file():
+            files.append(path)
+
+    bad = set()
+    # 逐个文件算出它在 tests/ 下的相对目录,再去 src/ 与仓库根找同名目录
+    for item in files:
+        parts = item.parts
+        # 不在 tests/ 下的文件与本规则无关
+        if 'tests' not in parts[:-1]:
+            continue
+        cut = parts.index('tests')
+        # tests 之前的部分就是仓库根;tests 在最前面时根是当前目录
+        root = Path(*parts[:cut]) if cut else Path('.')
+        rel = list(parts[cut + 1:-1])
+        # 剥掉开头的测试层级
+        if rel and rel[0] in _MIRROR_TIERS:
+            rel = rel[1:]
+        # tests/ 直下的文件,或落在辅助目录里,都不要求镜像
+        if not rel or _MIRROR_EXEMPT & set(rel):
+            continue
+        # src/<路径> 或仓库根 <路径> 任一存在即算镜像成立
+        if not (root / 'src' / Path(*rel)).is_dir() and not (root / Path(*rel)).is_dir():
+            bad.add((str(item.parent), '/'.join(rel)))
+
+    return [Finding(path=folder, line=1, rule='test-mirror',
+                    detail=f'src/{rel} 与仓库根 {rel} 都不存在,测试目录没有对应的源码目录',
+                    why=RULES['test-mirror'])
+            for folder, rel in sorted(bad)]
+
+
 def test_imports(facts_list):
     """测试模块之间互相 import 的判定。
 

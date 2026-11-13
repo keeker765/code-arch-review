@@ -220,6 +220,9 @@ def run(paths, args):
     # 目录平铺不分语言:SQL/yaml/数据目录 discover 不收,所以拿原始路径单独查
     if 'flat-dirs' not in optional_off:
         findings.extend(package.dir_fanout(paths, MAX_DIRS, _SKIP_DIRS | frozenset(args.exclude)))
+    # 测试目录镜像源码:同样只看路径,不分语言
+    if 'test-mirror' not in optional_off:
+        findings.extend(package.test_mirror(paths, _SKIP_DIRS | frozenset(args.exclude)))
     return findings, len(all_facts), failed, covered, total, report.density(all_facts), unknown
 
 
