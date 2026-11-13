@@ -5,15 +5,7 @@ description: 【强制,非可选】代码结构验收闸,用户 2026-09-08 定,2
 
 # 代码结构验收
 
-🔴 强制标准,不是建议。动手前读本页,不是写完再来对照。
-
-## 动手前两问
-
-用户 2026-11-13 定,写任何代码之前先答这几题,答不上就先去查:
-
-1. **这个功能有没有?** 先搜仓库(函数名、命令表、README、相邻目录)和记忆库,已有或有半成品就复用、扩展,不另造一份。
-2. **放的位置对不对?** 和逻辑归属一致、和仓库现有目录惯例一致、方便管理;只看文件树路径就能猜出它是干什么的。新入口登记进已有的命令表或 README,不散放脚本。
-3. **要新建文件夹?** 新文件夹就是新模块:先想清它管什么,在仓库根 `DIRS.md` 补一行 ``- `路径` — 一句话说明``(只写模块级目录),和新目录同一次提交;说不清就别建,放进已有模块。没有 `DIRS.md` 的仓库,建第一个目录时一并建它。
+🔴 强制标准,不是建议。动手前读本页,不是写完再来对照。写代码前先答三问:功能有没有、放的位置合不合惯例、新建文件夹先在 `DIRS.md` 下定义 —— 细则见 [layout.md](references/layout.md)「动手前三问」。
 
 ## 顺序
 
@@ -38,7 +30,7 @@ python "${CLAUDE_SKILL_DIR}/scripts/check.py" <路径...>
 | `dict-as-type` / `uncommented-field` / `uncommented-assign` / `uncommented-flat` | 4 键 / 每处 / 算式赋值 / 连续 10 条 | 字段含义与计算口径藏在名字里;字段写行尾或类 docstring 的 `Attributes:`;一组操作前一段块注释即可 | [comments](references/comments.md) |
 | `uncommented-condition` / `uncommented-loop` / `silent-except` | 每条链 / 复杂循环 / 每处 | 每条 if/elif 链一条注释,写在链开头,单条件卫语句除外;while、体 ≥3 条或含 break/continue 的循环要说明;失败态不许静默 | [comments](references/comments.md) |
 | `no-docstring` / `thin-docstring` / `docstring-sections` / `thin-module-doc` | 见分册 | 不看实现就能写出调用;摘要后必须有解释段(类也一样) | [docstrings](references/docstrings.md) |
-| `flat-package` / `flat-dirs` / `test-mirror` / `duplicate-basename` / `duplicate-toplevel` | 7 个模块 / 12 个子目录(SQL、数据目录也算) / 测试目录在 src 或根下无同名目录 / 跨目录重名 / 顶层重定义 | 扫不完等于没有导航;后定义静默胜出 | [layout](references/layout.md) |
+| `flat-package` / `flat-dirs` / `test-mirror` / `dirs-md` / `duplicate-basename` / `duplicate-toplevel` | 7 个模块 / 12 个子目录(SQL、数据目录也算) / 测试目录在 src 或根下无同名目录 / 目录在 DIRS.md 缺说明或说明已过期 / 跨目录重名 / 顶层重定义 | 扫不完等于没有导航;后定义静默胜出 | [layout](references/layout.md) |
 | `sibling-import` / `import-order` / `multi-import` | 包内禁互导 / future→stdlib→其余,组内字典序 / 每行一个 | 依赖成网;导入顺序可读 | [imports](references/imports.md) |
 | `test-syspath` / `no-collectable-test` / `test-import-test` | 仅测试模块 | 测哪份代码靠猜;用例静默不跑 | [languages](references/languages.md) |
 

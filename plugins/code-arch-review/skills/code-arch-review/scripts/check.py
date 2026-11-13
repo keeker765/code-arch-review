@@ -28,7 +28,7 @@ _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from core import package, report          # noqa: E402
+from core import dirs_md, package, report  # noqa: E402
 from core.rules import COMMENT_RULES, OPTIONAL_RULES, evaluate  # noqa: E402
 from lang import registry                 # noqa: E402
 
@@ -223,6 +223,9 @@ def run(paths, args):
     # 测试目录镜像源码:同样只看路径,不分语言
     if 'test-mirror' not in optional_off:
         findings.extend(package.test_mirror(paths, _SKIP_DIRS | frozenset(args.exclude)))
+    # 目录说明 DIRS.md:同样只看路径;仓库根没有 DIRS.md 时不查
+    if 'dirs-md' not in optional_off:
+        findings.extend(dirs_md.dirs_md(paths, _SKIP_DIRS | frozenset(args.exclude)))
     return findings, len(all_facts), failed, covered, total, report.density(all_facts), unknown
 
 
