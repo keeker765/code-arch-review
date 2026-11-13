@@ -4,6 +4,8 @@
 所以它们**不参与覆盖率**:分母是「该解释的构造」,而这里量的是目录与依赖形状。
 """
 
+import os
+from pathlib import Path
 import sys
 
 # py-structure: allow-sibling-imports —— 同目录判据模块是这个 skill 的结构
@@ -60,6 +62,48 @@ def package_shape(paths, max_modules, reserved):
             path=where, line=1, rule='duplicate-basename',
             detail=f'{name} 出现在 {len(folders)} 个目录',
             why=RULES['duplicate-basename']))
+    return found
+
+
+def dir_fanout(paths, max_dirs, skip_dirs):
+    """查目录平铺:一个目录下的直接子目录数超过上限。
+
+    和 ``package_shape`` 不同,这里不看文件是什么语言 —— 只放 SQL、yaml、数据的目录
+    一样会平铺到没法导航,而 ``discover`` 只认代码文件,那种目录永远到不了 ``package_shape``。
+    给的是目录就递归查它和它下面每一层;给的是文件(pre-push 只给改动文件)就查父目录和祖父目录,
+    这样「往某个目录里新建一个子目录再放文件」这种改动也能被看见。
+
+    Args:
+        paths: 命令行给的原始路径(文件或目录,文件可以已被删除)。
+        max_dirs: 一个目录允许的直接子目录数上限。
+        skip_dirs: 不计数也不递归的目录名;以 ``.`` 开头的目录同样跳过。
+
+    Returns:
+        违规列表,字段与单文件规则一致。
+    """
+    def visible(entry):
+        return entry.is_dir() and entry.name not in skip_dirs and not entry.name.startswith('.')
+
+    targets = set()
+    for raw in paths:
+        path = Path(raw)
+        # 目录:它自己和下面每一层都要查
+        if path.is_dir():
+            targets.add(path)
+            for here, dirs, _ in os.walk(path):
+                dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith('.')]
+                targets.update(Path(here) / d for d in dirs)
+            continue
+        targets.update(parent for parent in (path.parent, path.parent.parent) if parent.is_dir())
+
+    found = []
+    for folder in sorted(targets):
+        count = sum(1 for entry in folder.iterdir() if visible(entry))
+        if count > max_dirs:
+            found.append(Finding(
+                path=str(folder), line=1, rule='flat-dirs',
+                detail=f'{count} 个子目录平铺在同一层 > {max_dirs}',
+                why=RULES['flat-dirs']))
     return found
 
 

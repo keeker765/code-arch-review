@@ -37,6 +37,9 @@ from lang import registry                 # noqa: E402
 # `vendor` 与 `third_party` 和 `node_modules` 同类:放的是第三方的副本或压缩产物。
 # 代价说清楚 —— 真有项目在里面手写代码,那些文件会被静默漏掉,所以这两个名字只在
 # **整个目录名**匹配时跳过,`src/vendor_utils/` 这种不受影响。
+#: 一个目录允许的直接子目录数上限(flat-dirs)
+MAX_DIRS = 12
+
 _SKIP_DIRS = frozenset({
     '__pycache__', '.git', '.hg', '.svn', 'node_modules', '.venv', 'venv',
     '.mypy_cache', '.pytest_cache', '.ruff_cache', 'dist', 'build', '.tox',
@@ -214,6 +217,9 @@ def run(paths, args):
         all_facts.extend(facts)
         covered += lang_covered
         total += lang_total
+    # 目录平铺不分语言:SQL/yaml/数据目录 discover 不收,所以拿原始路径单独查
+    if 'flat-dirs' not in optional_off:
+        findings.extend(package.dir_fanout(paths, MAX_DIRS, _SKIP_DIRS | frozenset(args.exclude)))
     return findings, len(all_facts), failed, covered, total, report.density(all_facts), unknown
 
 
@@ -313,8 +319,9 @@ def main():
     args = parser.parse_args()
 
     findings, file_count, skipped, covered, total, density, unknown = run(args.paths, args)
-    # 空集不许冒充通过:一个目标都没扫到,说明路径写错了或语言不支持
-    if not file_count:
+    # 空集不许冒充通过:一个目标都没扫到,说明路径写错了或语言不支持;
+    # 只给了 SQL/yaml 这类非代码文件但查出目录平铺时,照常报出来
+    if not file_count and not findings:
         # 汇总前 5 个未知文件的扩展名,用于友好的未命中原因回显
         names = ', '.join(path.suffix or '(无扩展名)' for path in unknown[:5])
         sys.exit(f'没有匹配到任何目标文件,拒绝以「零违规」收场。'
