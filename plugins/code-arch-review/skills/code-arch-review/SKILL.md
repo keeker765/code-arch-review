@@ -91,5 +91,5 @@ python "${CLAUDE_SKILL_DIR}/selfcheck/run.py"
 | 文档注释与内容标准 | [docstrings.md](references/docstrings.md) · [opus-style.md](references/opus-style.md) |
 | 导入结构:包内互导、分组顺序 | [imports.md](references/imports.md) |
 | 各语言档位、语法、已知缺口 | [languages.md](references/languages.md) · [languages-js.md](references/languages-js.md) |
-| 目录、拆包、层数 | [layout.md](references/layout.md) |
+| 目录、拆包、层数、按职责分组的 7 条完成标准 | [layout.md](references/layout.md) |
 | 规则依据、闸拦不住的 | [rationale.md](references/rationale.md) |
